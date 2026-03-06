@@ -1,7 +1,7 @@
 # Proguard rules for Armstrong & Getty Podcast
 
 # Keep Room entities
--keep class com.nomnomsom.starwarsshop.data.model.** { *; }
+-keep class com.nomnomsom.aandg.data.model.** { *; }
 
 # Keep Gson serialization
 -keepattributes Signature

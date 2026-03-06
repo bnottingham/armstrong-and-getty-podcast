@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nomnomsom.starwarsshop"
+    namespace = "com.nomnomsom.aandg"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.nomnomsom.starwarsshop"
+        applicationId = "com.nomnomsom.aandg"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
