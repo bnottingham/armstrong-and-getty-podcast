@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
@@ -34,6 +36,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,18 +49,24 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.nomnomsom.aandg.data.model.DownloadState
 import com.nomnomsom.aandg.data.model.PodcastDay
 import com.nomnomsom.aandg.media.PlaybackState
+import com.nomnomsom.aandg.ui.screens.auth.AuthViewModel
 import com.nomnomsom.aandg.ui.theme.ErrorRed
 import com.nomnomsom.aandg.ui.theme.Gold
 import com.nomnomsom.aandg.ui.theme.LiveRed
@@ -72,18 +82,24 @@ import java.util.Locale
 @Composable
 fun EpisodeListScreen(
     viewModel: EpisodeListViewModel,
+    authViewModel: AuthViewModel,
     onEpisodeClick: (PodcastDay) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
+    val authState by authViewModel.uiState.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        EpisodeListHeader()
+        // Header with user avatar
+        EpisodeListHeader(
+            photoUrl = authState.user?.photoUrl?.toString(),
+            displayName = authState.user?.displayName,
+            onSignOut = { authViewModel.signOut() }
+        )
 
         // Now playing mini bar
         if (playbackState.currentDayDate != null && playbackState.isReady) {
@@ -130,7 +146,13 @@ fun EpisodeListScreen(
 }
 
 @Composable
-private fun EpisodeListHeader() {
+private fun EpisodeListHeader(
+    photoUrl: String?,
+    displayName: String?,
+    onSignOut: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,7 +178,7 @@ private fun EpisodeListHeader() {
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Armstrong & Getty",
                 style = MaterialTheme.typography.headlineMedium
@@ -165,6 +187,66 @@ private fun EpisodeListHeader() {
                 text = "PODCAST · ON DEMAND",
                 style = MaterialTheme.typography.labelSmall
             )
+        }
+
+        // User avatar with dropdown
+        Box {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { showMenu = true },
+                contentAlignment = Alignment.Center
+            ) {
+                if (photoUrl != null) {
+                    AsyncImage(
+                        model = photoUrl,
+                        contentDescription = "Profile",
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.Person,
+                        contentDescription = "Profile",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                if (displayName != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                displayName,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        },
+                        onClick = { },
+                        enabled = false
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Sign Out") },
+                    onClick = {
+                        showMenu = false
+                        onSignOut()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                )
+            }
         }
     }
 }
@@ -298,7 +380,6 @@ private fun EpisodeDayCard(
             // State-dependent bottom section
             when (downloadState) {
                 DownloadState.DOWNLOADED -> {
-                    // Progress bar
                     val progress = if (day.totalDurationMs > 0) {
                         (day.listenedPositionMs.toFloat() / day.totalDurationMs).coerceIn(0f, 1f)
                     } else 0f
