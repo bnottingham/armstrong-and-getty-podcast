@@ -55,7 +55,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.12.4")
 
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2026.02.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.02.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -71,8 +71,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
 
     // Hilt DI
-    implementation("com.google.dagger:hilt-android:2.59.1")
-    ksp("com.google.dagger:hilt-android-compiler:2.59.1")
+    implementation("com.google.dagger:hilt-android:2.59.2")
+    ksp("com.google.dagger:hilt-android-compiler:2.59.2")
 
     // Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
@@ -84,17 +84,17 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
 
     // Room Database
-    implementation("androidx.room:room-runtime:2.7.1")
-    implementation("androidx.room:room-ktx:2.7.1")
-    ksp("androidx.room:room-compiler:2.7.1")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     // Media3 (ExoPlayer) for audio playback + MediaSession
-    implementation("androidx.media3:media3-exoplayer:1.6.1")
-    implementation("androidx.media3:media3-session:1.6.1")
-    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-exoplayer:1.9.2")
+    implementation("androidx.media3:media3-session:1.9.2")
+    implementation("androidx.media3:media3-ui:1.9.2")
 
     // WorkManager for background download
     implementation("androidx.work:work-runtime-ktx:2.11.1")
