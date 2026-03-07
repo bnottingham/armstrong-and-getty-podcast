@@ -1,14 +1,10 @@
 package com.nomnomsom.aandg.auth
 
 import android.content.Context
-import androidx.credentials.ClearCredentialStateRequest
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import android.content.Intent
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -27,10 +23,16 @@ class AuthRepository @Inject constructor(
 ) {
     companion object {
         // Web client ID from google-services.json → oauth_client with client_type 3
-        const val WEB_CLIENT_ID = "801903863071-055or60t46oh6vdo6kh1i826bur9ehnr.apps.googleusercontent.com"
+        const val WEB_CLIENT_ID = "638087230340-8d2fo5vqsiaa9l4tu7s84617l5b50n9g.apps.googleusercontent.com"
     }
 
-    private val credentialManager = CredentialManager.create(context)
+    private val googleSignInClient: GoogleSignInClient by lazy {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(WEB_CLIENT_ID)
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
 
     val currentUser: FirebaseUser?
         get() = firebaseAuth.currentUser
@@ -50,63 +52,41 @@ class AuthRepository @Inject constructor(
     }
 
     /**
-     * Build the Credential Manager request for Google Sign-In.
-     * The caller (Activity) must invoke credentialManager.getCredential() with this request.
+     * Get the sign-in intent to launch with Activity Result API.
      */
-    fun buildGoogleSignInRequest(): GetCredentialRequest {
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(WEB_CLIENT_ID)
-            .setAutoSelectEnabled(true)
-            .build()
-
-        return GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-    }
+    fun getSignInIntent(): Intent = googleSignInClient.signInIntent
 
     /**
-     * Handle the credential response from Credential Manager and sign in with Firebase.
+     * Handle the result from the Google Sign-In intent.
+     * Extract the ID token and sign in with Firebase.
      */
-    suspend fun handleSignInResult(response: GetCredentialResponse): Result<FirebaseUser> {
-        val credential = response.credential
+    suspend fun handleSignInResult(data: Intent?): Result<FirebaseUser> {
+        return try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            val account = task.await()
+            val idToken = account.idToken
+                ?: return Result.failure(Exception("No ID token received from Google"))
 
-        return when (credential) {
-            is CustomCredential -> {
-                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    try {
-                        val googleIdTokenCredential =
-                            GoogleIdTokenCredential.createFrom(credential.data)
-                        val idToken = googleIdTokenCredential.idToken
-
-                        val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                        val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
-                        val user = authResult.user
-                        if (user != null) {
-                            Result.success(user)
-                        } else {
-                            Result.failure(Exception("Firebase sign-in returned null user"))
-                        }
-                    } catch (e: GoogleIdTokenParsingException) {
-                        Result.failure(Exception("Failed to parse Google ID token: ${e.message}"))
-                    }
-                } else {
-                    Result.failure(Exception("Unexpected credential type: ${credential.type}"))
-                }
+            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+            val user = authResult.user
+            if (user != null) {
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Firebase sign-in returned null user"))
             }
-            else -> Result.failure(Exception("Unexpected credential type"))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
     /**
-     * Sign out from Firebase and clear credential state.
+     * Sign out from Firebase and Google.
      */
     suspend fun signOut() {
         firebaseAuth.signOut()
         try {
-            credentialManager.clearCredentialState(ClearCredentialStateRequest())
-        } catch (_: Exception) {
-            // Clearing credential state can fail on some devices; non-critical
-        }
+            googleSignInClient.signOut().await()
+        } catch (_: Exception) { }
     }
 }

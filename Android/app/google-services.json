@@ -1,33 +1,41 @@
 {
   "project_info": {
-    "project_number": "801903863071",
-    "project_id": "armstrong-and-getty-app",
-    "storage_bucket": "armstrong-and-getty-app.firebasestorage.app"
+    "project_number": "816792233694",
+    "project_id": "armstrong-and-getty-app-d67a4",
+    "storage_bucket": "armstrong-and-getty-app-d67a4.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:801903863071:android:15e79874721fb7aa81bc2a",
+        "mobilesdk_app_id": "1:816792233694:android:5ee7701bc2ce093285044f",
         "android_client_info": {
           "package_name": "com.nomnomsom.aandg"
         }
       },
       "oauth_client": [
         {
-          "client_id": "801903863071-055or60t46oh6vdo6kh1i826bur9ehnr.apps.googleusercontent.com",
+          "client_id": "816792233694-1p161p66u2ua2n3iv1ric7mmbr3ml0no.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nomnomsom.aandg",
+            "certificate_hash": "7de3c8057001e8fde2e5b3e6d0155d3881a9f8f7"
+          }
+        },
+        {
+          "client_id": "816792233694-0q70jdr5218aa8tjvfra0lpgp1esqn2v.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBeaqwTQcldBYuicSRTeyEmUmG-wCOyXpw"
+          "current_key": "AIzaSyBuXA8oGFLRSSj9aqSSskJ0SNq0aufJkjs"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "801903863071-055or60t46oh6vdo6kh1i826bur9ehnr.apps.googleusercontent.com",
+              "client_id": "816792233694-0q70jdr5218aa8tjvfra0lpgp1esqn2v.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

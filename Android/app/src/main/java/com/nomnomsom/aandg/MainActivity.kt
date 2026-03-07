@@ -47,7 +47,6 @@ fun AppRoot() {
 
     when {
         authState.isLoading -> {
-            // Splash / loading while checking auth state
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -56,11 +55,9 @@ fun AppRoot() {
             }
         }
         authState.user == null -> {
-            // Not signed in — show auth screen
             AuthScreen(viewModel = authViewModel)
         }
         else -> {
-            // Signed in — show main app
             AGPodcastNavigation(authViewModel = authViewModel)
         }
     }
@@ -69,8 +66,6 @@ fun AppRoot() {
 @Composable
 fun AGPodcastNavigation(authViewModel: AuthViewModel) {
     val navController = rememberNavController()
-
-    // Share the same ViewModel across screens so playback state persists
     val viewModel: EpisodeListViewModel = hiltViewModel()
 
     NavHost(

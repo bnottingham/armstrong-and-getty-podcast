@@ -1,14 +1,15 @@
 package com.nomnomsom.aandg.ui.screens.auth
 
 import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,34 +26,38 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.credentials.CredentialManager
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.NoCredentialException
-import com.nomnomsom.aandg.ui.theme.DarkBg
 import com.nomnomsom.aandg.ui.theme.Gold
 import com.nomnomsom.aandg.ui.theme.TextMuted
-import com.nomnomsom.aandg.ui.theme.TextPrimary
 import com.nomnomsom.aandg.ui.theme.TextSecondary
-import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
     viewModel: AuthViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+
+    // Activity Result launcher for Google Sign-In
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.d("AUTH", "Sign-in result: resultCode=${result.resultCode}, data=${result.data}")
+        // Always try to handle the result — Google Sign-In can return
+        // RESULT_OK or RESULT_CANCELED but still have valid data
+        if (result.data != null) {
+            viewModel.handleSignInResult(result.data)
+        } else {
+            Log.e("AUTH", "No data in result")
+            viewModel.onSignInFailed("Sign-in returned no data")
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -72,15 +77,13 @@ fun AuthScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "A&G",
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-2).sp,
-                        color = Gold
-                    )
-                }
+                Text(
+                    text = "A&G",
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-2).sp,
+                    color = Gold
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -116,28 +119,10 @@ fun AuthScreen(
             // Google Sign-In button
             Button(
                 onClick = {
-                    scope.launch {
-                        viewModel.clearError()
-                        val credentialManager = CredentialManager.create(context)
-                        val request = viewModel.buildGoogleSignInRequest()
-                        try {
-                            val result = credentialManager.getCredential(
-                                request = request,
-                                context = context as Activity
-                            )
-                            viewModel.handleSignInResult(result)
-                        } catch (e: GetCredentialCancellationException) {
-                            // User cancelled — do nothing
-                        } catch (e: NoCredentialException) {
-                            viewModel.onSignInFailed(
-                                "No Google accounts found. Please add a Google account to your device."
-                            )
-                        } catch (e: GetCredentialException) {
-                            viewModel.onSignInFailed(
-                                e.message ?: "Sign-in failed. Please try again."
-                            )
-                        }
-                    }
+                    Log.d("AUTH", "Button clicked — launching Google Sign-In intent")
+                    viewModel.clearError()
+                    val signInIntent = viewModel.getSignInIntent()
+                    signInLauncher.launch(signInIntent)
                 },
                 enabled = !uiState.isSigningIn,
                 modifier = Modifier
@@ -163,7 +148,6 @@ fun AuthScreen(
                         fontSize = 15.sp
                     )
                 } else {
-                    // Google "G" logo as text (in production you'd use the official SVG)
                     Text(
                         text = "G",
                         fontWeight = FontWeight.Bold,
@@ -185,7 +169,6 @@ fun AuthScreen(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = uiState.error ?: "",
                     style = MaterialTheme.typography.bodySmall.copy(
