@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
-        android:name=".AGPodcastApp"
+        android:name="com.nomnomsom.armstrongandgetty.AGPodcastApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Armstrong &amp; Getty Podcast"
@@ -18,7 +18,7 @@
         tools:targetApi="36">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.nomnomsom.armstrongandgetty.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/Theme.AGPodcast">
@@ -30,7 +30,7 @@
 
         <!-- Media playback service for background audio, lock screen, notifications -->
         <service
-            android:name=".media.PlaybackService"
+            android:name="com.nomnomsom.armstrongandgetty.media.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService">

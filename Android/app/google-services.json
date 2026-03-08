@@ -7,18 +7,18 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:816792233694:android:5ee7701bc2ce093285044f",
+        "mobilesdk_app_id": "1:816792233694:android:f26c55763ec6c3d885044f",
         "android_client_info": {
-          "package_name": "com.nomnomsom.aandg"
+          "package_name": "com.nomnomsom.armstrongandgetty"
         }
       },
       "oauth_client": [
         {
-          "client_id": "816792233694-1p161p66u2ua2n3iv1ric7mmbr3ml0no.apps.googleusercontent.com",
+          "client_id": "816792233694-357l4510ustkr2ama24pa9l5jfjbbcre.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.nomnomsom.aandg",
-            "certificate_hash": "7de3c8057001e8fde2e5b3e6d0155d3881a9f8f7"
+            "package_name": "com.nomnomsom.armstrongandgetty",
+            "certificate_hash": "c735e11204c40f97af0fe800d4ccb1633aaeabe3"
           }
         },
         {

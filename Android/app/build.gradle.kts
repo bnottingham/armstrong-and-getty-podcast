@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nomnomsom.aandg"
+    namespace = "com.nomnomsom.armstrongandgetty"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.nomnomsom.aandg"
+        applicationId = "com.nomnomsom.armstrongandgetty"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
