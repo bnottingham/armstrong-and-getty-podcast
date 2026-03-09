@@ -6,12 +6,14 @@ import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
-import androidx.media3.common.util.UnstableApi
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -22,11 +24,11 @@ class PlaybackService : MediaSessionService() {
     private var exoPlayer: ExoPlayer? = null
 
     companion object {
-        const val ACTION_SEEK_BACK_15 = "com.nomnomsom.armstrongandgetty.SEEK_BACK_15"
-        const val ACTION_SEEK_FORWARD_15 = "com.nomnomsom.armstrongandgetty.SEEK_FORWARD_15"
+        const val ACTION_SEEK_BACK_30 = "com.nomnomsom.armstrongandgetty.SEEK_BACK_30"
+        const val ACTION_SEEK_FORWARD_30 = "com.nomnomsom.armstrongandgetty.SEEK_FORWARD_30"
 
-        private val SEEK_BACK_COMMAND = SessionCommand(ACTION_SEEK_BACK_15, Bundle.EMPTY)
-        private val SEEK_FORWARD_COMMAND = SessionCommand(ACTION_SEEK_FORWARD_15, Bundle.EMPTY)
+        private val SEEK_BACK_COMMAND = SessionCommand(ACTION_SEEK_BACK_30, Bundle.EMPTY)
+        private val SEEK_FORWARD_COMMAND = SessionCommand(ACTION_SEEK_FORWARD_30, Bundle.EMPTY)
     }
 
     override fun onCreate() {
@@ -41,13 +43,12 @@ class PlaybackService : MediaSessionService() {
                 /* handleAudioFocus = */ true
             )
             .setHandleAudioBecomingNoisy(true)
-            .setSeekBackIncrementMs(15_000)
-            .setSeekForwardIncrementMs(15_000)
+            .setSeekBackIncrementMs(30_000)
+            .setSeekForwardIncrementMs(30_000)
             .build()
 
         exoPlayer = player
 
-        // Create the activity intent for when user taps notification
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -93,8 +94,21 @@ class PlaybackService : MediaSessionService() {
                 .add(SEEK_FORWARD_COMMAND)
                 .build()
 
+            // Define the notification button layout:
+            // [Seek Back 30s] [Play/Pause] [Seek Forward 30s]
+            val seekBackButton = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
+                .setDisplayName("Back 30s")
+                .setSessionCommand(SEEK_BACK_COMMAND)
+                .build()
+
+            val seekForwardButton = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+                .setDisplayName("Forward 30s")
+                .setSessionCommand(SEEK_FORWARD_COMMAND)
+                .build()
+
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
+                .setCustomLayout(ImmutableList.of(seekBackButton, seekForwardButton))
                 .build()
         }
 
@@ -105,14 +119,14 @@ class PlaybackService : MediaSessionService() {
             args: Bundle
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
-                ACTION_SEEK_BACK_15 -> {
+                ACTION_SEEK_BACK_30 -> {
                     session.player.seekTo(
-                        (session.player.currentPosition - 15_000).coerceAtLeast(0)
+                        (session.player.currentPosition - 30_000).coerceAtLeast(0)
                     )
                 }
-                ACTION_SEEK_FORWARD_15 -> {
+                ACTION_SEEK_FORWARD_30 -> {
                     session.player.seekTo(
-                        (session.player.currentPosition + 15_000)
+                        (session.player.currentPosition + 30_000)
                             .coerceAtMost(session.player.duration)
                     )
                 }

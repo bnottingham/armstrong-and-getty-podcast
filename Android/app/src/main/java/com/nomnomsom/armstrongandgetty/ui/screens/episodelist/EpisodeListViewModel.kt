@@ -61,20 +61,14 @@ class EpisodeListViewModel @Inject constructor(
     val modelStatus: StateFlow<ModelStatus> = voskModelManager.status
 
     init {
-        // Observe all days from DB
         viewModelScope.launch {
             repository.observeAllDays().collect { days ->
                 _uiState.value = _uiState.value.copy(days = days)
             }
         }
 
-        // Connect to playback service
         playbackController.connect()
-
-        // Initial feed refresh
         refreshFeed()
-
-        // If signed in, pull remote progress and merge with local
         syncRemoteProgressToLocal()
     }
 
@@ -89,15 +83,9 @@ class EpisodeListViewModel @Inject constructor(
                 val latestDay = repository.getDayByDate(latestDate)
                 if (latestDay != null) {
                     when {
-                        latestDay.downloadState == DownloadState.NONE.value -> {
-                            downloadDay(latestDate)
-                        }
-                        latestDay.downloadState == DownloadState.DOWNLOADED.value && !latestDay.isComplete -> {
-                            checkForNewSegments(latestDate)
-                        }
-                        latestDay.downloadState == DownloadState.ERROR.value -> {
-                            downloadDay(latestDate)
-                        }
+                        latestDay.downloadState == DownloadState.NONE.value -> downloadDay(latestDate)
+                        latestDay.downloadState == DownloadState.DOWNLOADED.value && !latestDay.isComplete -> checkForNewSegments(latestDate)
+                        latestDay.downloadState == DownloadState.ERROR.value -> downloadDay(latestDate)
                     }
                 }
             } else {
@@ -118,8 +106,21 @@ class EpisodeListViewModel @Inject constructor(
     fun resetProgress(date: String) {
         viewModelScope.launch {
             repository.resetProgress(date)
-            // Also reset remote progress if signed in
             progressSyncRepository.pushProgress(date, 0L, false)
+        }
+    }
+
+    /**
+     * Delete a day's episode — removes audio files and DB record.
+     * If this day is currently playing, stop playback first.
+     */
+    fun deleteDay(date: String) {
+        viewModelScope.launch {
+            // Stop playback if this day is playing
+            if (playbackState.value.currentDayDate == date) {
+                playbackController.pause()
+            }
+            repository.deleteDay(date)
         }
     }
 
@@ -175,25 +176,11 @@ class EpisodeListViewModel @Inject constructor(
         }
     }
 
-    fun togglePlayPause() {
-        playbackController.togglePlayPause()
-    }
-
-    fun seekRelative(deltaMs: Long) {
-        playbackController.seekRelative(deltaMs)
-    }
-
-    fun seekTo(positionMs: Long) {
-        playbackController.seekTo(positionMs)
-    }
-
-    fun seekToSegment(index: Int) {
-        playbackController.seekToSegment(index)
-    }
-
-    fun cycleSpeed(): Float {
-        return playbackController.cyclePlaybackSpeed()
-    }
+    fun togglePlayPause() = playbackController.togglePlayPause()
+    fun seekRelative(deltaMs: Long) = playbackController.seekRelative(deltaMs)
+    fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+    fun seekToSegment(index: Int) = playbackController.seekToSegment(index)
+    fun cycleSpeed(): Float = playbackController.cyclePlaybackSpeed()
 
     fun getSegmentsForDay(day: PodcastDay): List<Segment> {
         return repository.parseSegments(day.segmentsJson)
@@ -204,7 +191,6 @@ class EpisodeListViewModel @Inject constructor(
     fun observeTranscriptsForDay(date: String, segmentCount: Int) {
         viewModelScope.launch {
             transcriptionManager.resetStuckTranscripts(date)
-
             transcriptionManager.observeTranscripts(date).collect { transcripts ->
                 val isTranscribing = transcripts.any { it.state == TranscriptState.TRANSCRIBING.value }
                 _transcriptState.value = TranscriptUiState(
@@ -236,9 +222,6 @@ class EpisodeListViewModel @Inject constructor(
 
     // ── Progress persistence ─────────────────────────────
 
-    /**
-     * Save listen progress to Room (always) and Firestore (if signed in).
-     */
     fun saveListenProgress() {
         val state = playbackState.value
         val date = state.currentDayDate ?: return
@@ -247,18 +230,11 @@ class EpisodeListViewModel @Inject constructor(
         val isListened = state.currentPositionMs >= state.durationMs - 5000
 
         viewModelScope.launch {
-            // Always save locally
             repository.updateListenProgress(date, state.currentPositionMs, isListened)
-
-            // Also sync to Firestore if the user is authenticated
             progressSyncRepository.pushProgress(date, state.currentPositionMs, isListened)
         }
     }
 
-    /**
-     * On startup (if signed in), pull all remote progress and merge with local.
-     * Remote wins if its lastUpdated timestamp is newer than the local lastUpdated.
-     */
     private fun syncRemoteProgressToLocal() {
         if (firebaseAuth.currentUser == null) return
 
@@ -269,23 +245,12 @@ class EpisodeListViewModel @Inject constructor(
 
                 for ((date, remote) in remoteProgress) {
                     val localDay = repository.getDayByDate(date) ?: continue
-
-                    // Remote wins if it has a newer timestamp than local
                     if (remote.lastUpdated > localDay.lastUpdated) {
                         Log.d(TAG, "Applying remote progress for $date: ${remote.listenedPositionMs}ms")
-                        repository.updateListenProgress(
-                            date,
-                            remote.listenedPositionMs,
-                            remote.isListened
-                        )
+                        repository.updateListenProgress(date, remote.listenedPositionMs, remote.isListened)
                     } else {
-                        // Local is newer — push local to remote so they stay in sync
                         if (localDay.listenedPositionMs > 0) {
-                            progressSyncRepository.pushProgress(
-                                date,
-                                localDay.listenedPositionMs,
-                                localDay.isListened
-                            )
+                            progressSyncRepository.pushProgress(date, localDay.listenedPositionMs, localDay.isListened)
                         }
                     }
                 }

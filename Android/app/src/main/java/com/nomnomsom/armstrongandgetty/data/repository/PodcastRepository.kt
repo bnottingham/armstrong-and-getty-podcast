@@ -30,10 +30,6 @@ class PodcastRepository @Inject constructor(
 
     suspend fun getDayByDate(date: String): PodcastDay? = dao.getDayByDate(date)
 
-    /**
-     * Refresh the feed: parse RSS, group items by date, update DB.
-     * Returns the latest day's date string.
-     */
     suspend fun refreshFeed(): Result<String> {
         val result = rssFeedParser.fetchFeed()
         if (result.isFailure) return Result.failure(result.exceptionOrNull()!!)
@@ -58,10 +54,8 @@ class PodcastRepository @Inject constructor(
                     pubDate = item.pubDate
                 )
             }.sortedBy { seg ->
-                // Sort by pubDate ascending so Hour 1 (earliest) comes first
                 parsePubDate(seg.pubDate)
             }.mapIndexed { index, seg ->
-                // Re-assign hour labels based on chronological order
                 val hourLabel = if (seg.hour == "OMT") "OMT"
                 else extractHourLabel(seg.title, index + 1)
                 seg.copy(hour = hourLabel)
@@ -73,7 +67,6 @@ class PodcastRepository @Inject constructor(
             val isComplete = isDayComplete(date, segments)
 
             if (existingDay == null) {
-                // New day — insert
                 val day = PodcastDay(
                     date = date,
                     title = formatDayTitle(date),
@@ -90,7 +83,6 @@ class PodcastRepository @Inject constructor(
                 )
                 dao.insertOrReplace(day)
             } else {
-                // Existing day — update segments if there are new ones
                 val existingSegments = parseSegments(existingDay.segmentsJson)
                 if (segments.size > existingSegments.size || !isComplete) {
                     dao.updateSegments(
@@ -109,20 +101,13 @@ class PodcastRepository @Inject constructor(
         return Result.success(latestDate)
     }
 
-    /**
-     * Download segments for a given date as individual files.
-     * Handles partial days: only downloads segments not already on disk.
-     * Measures actual durations of each segment and stores them.
-     */
     suspend fun downloadDay(date: String): Result<String> {
         val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
         val segments = parseSegments(day.segmentsJson)
         if (segments.isEmpty()) return Result.failure(Exception("No segments"))
 
-        // Count how many segments are already downloaded on disk
         val existingOnDisk = audioDownloader.countExistingSegments(date, segments.size)
 
-        // If all segments already exist on disk, just mark as downloaded
         if (existingOnDisk == segments.size) {
             dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
             return Result.success(date)
@@ -139,7 +124,6 @@ class PodcastRepository @Inject constructor(
         return if (downloadResult.isSuccess) {
             val result = downloadResult.getOrThrow()
 
-            // Update segments with actual measured durations
             val updatedSegments = segments.mapIndexed { index, seg ->
                 val actualDur = result.segmentActualDurationsMs.getOrElse(index) { 0L }
                 if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
@@ -164,9 +148,6 @@ class PodcastRepository @Inject constructor(
         }
     }
 
-    /**
-     * For an in-progress day that was already downloaded: check for and download new segments.
-     */
     suspend fun appendNewSegments(date: String): Result<String> {
         val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
         if (day.downloadState != DownloadState.DOWNLOADED.value) {
@@ -175,7 +156,6 @@ class PodcastRepository @Inject constructor(
 
         val previousSegmentCount = parseSegments(day.segmentsJson).size
 
-        // Re-fetch the feed to see if there are new segments
         val refreshResult = refreshFeed()
         if (refreshResult.isFailure) return Result.failure(refreshResult.exceptionOrNull()!!)
 
@@ -183,11 +163,9 @@ class PodcastRepository @Inject constructor(
         val updatedSegments = parseSegments(updatedDay.segmentsJson)
 
         if (updatedSegments.size <= previousSegmentCount) {
-            // No new segments
             return Result.success(date)
         }
 
-        // Count what's actually on disk (in case some got deleted)
         val existingOnDisk = audioDownloader.countExistingSegments(date, updatedSegments.size)
 
         val result = audioDownloader.downloadSegments(
@@ -218,14 +196,10 @@ class PodcastRepository @Inject constructor(
             )
             Result.success(date)
         } else {
-            // Don't set ERROR — the existing segments are still valid
             Result.failure(result.exceptionOrNull() ?: Exception("Download failed"))
         }
     }
 
-    /**
-     * Get the file paths for a day's downloaded segments.
-     */
     fun getSegmentFilePaths(date: String, segmentCount: Int): List<String> {
         return audioDownloader.getSegmentFiles(date, segmentCount)
     }
@@ -236,6 +210,14 @@ class PodcastRepository @Inject constructor(
 
     suspend fun resetProgress(date: String) {
         dao.resetProgress(date)
+    }
+
+    /**
+     * Delete a day's episode: remove audio files from disk and delete the DB record.
+     */
+    suspend fun deleteDay(date: String) {
+        audioDownloader.deleteSegmentFiles(date)
+        dao.deleteDay(date)
     }
 
     fun parseSegments(json: String): List<Segment> {
@@ -257,7 +239,6 @@ class PodcastRepository @Inject constructor(
 
         return items.mapNotNull { item ->
             try {
-                // RSS dates can have timezone suffix like "GMT" or "+0000"
                 val cleanDate = item.pubDate
                     .replace(" GMT", "")
                     .replace(" +0000", "")
@@ -290,12 +271,10 @@ class PodcastRepository @Inject constructor(
     }
 
     private fun extractHourLabel(title: String, fallbackIndex: Int): String {
-        // Try to extract "Hour X" from the title or description
         val hourPattern = Regex("Hour\\s+(\\d+)", RegexOption.IGNORE_CASE)
         val match = hourPattern.find(title)
         if (match != null) return match.groupValues[1]
 
-        // Check for "One More Thing" pattern
         if (title.contains("One More Thing", ignoreCase = true) ||
             title.contains("OMT", ignoreCase = true)
         ) {
@@ -306,8 +285,6 @@ class PodcastRepository @Inject constructor(
     }
 
     private fun isDayComplete(date: String, segments: List<Segment>): Boolean {
-        // A day is complete if it has 4 hours + optional OMT,
-        // or if the date is not today
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
         if (date != today) return true
 
@@ -326,7 +303,6 @@ class PodcastRepository @Inject constructor(
     }
 
     private fun buildSummary(segments: List<Segment>): String {
-        // Combine descriptions, truncate to reasonable length
         val combined = segments
             .map { it.description }
             .filter { it.isNotBlank() }

@@ -61,6 +61,9 @@ interface PodcastDayDao {
         lastUpdated: Long
     )
 
+    @Query("DELETE FROM podcast_days WHERE date = :date")
+    suspend fun deleteDay(date: String)
+
     @Query("SELECT * FROM podcast_days ORDER BY date DESC LIMIT 1")
     suspend fun getLatestDay(): PodcastDay?
 }
