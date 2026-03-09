@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,8 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,8 +51,6 @@ fun AuthScreen(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         Log.d("AUTH", "Sign-in result: resultCode=${result.resultCode}, data=${result.data}")
-        // Always try to handle the result — Google Sign-In can return
-        // RESULT_OK or RESULT_CANCELED but still have valid data
         if (result.data != null) {
             viewModel.handleSignInResult(result.data)
         } else {
@@ -178,7 +179,55 @@ fun AuthScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(36.dp))
+
+            // ── Divider with "or" ──
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = TextMuted.copy(alpha = 0.3f)
+                )
+                Text(
+                    text = "or",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = TextMuted.copy(alpha = 0.3f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Continue without account ──
+            TextButton(
+                onClick = { viewModel.skipAuth() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Continue without an account",
+                    color = TextSecondary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "You can listen to episodes offline, but your\nprogress won't sync across devices.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = TextMuted,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "Your data stays private and is only used\nto sync your podcast progress.",

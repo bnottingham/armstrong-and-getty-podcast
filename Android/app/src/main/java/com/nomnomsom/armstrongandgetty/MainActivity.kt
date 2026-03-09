@@ -54,11 +54,13 @@ fun AppRoot() {
                 CircularProgressIndicator(color = Gold)
             }
         }
-        authState.user == null -> {
-            AuthScreen(viewModel = authViewModel)
-        }
-        else -> {
+        // User is signed in OR chose to skip auth → show the main app
+        authState.user != null || authState.skippedAuth -> {
             AGPodcastNavigation(authViewModel = authViewModel)
+        }
+        // Not signed in and hasn't skipped → show auth screen
+        else -> {
+            AuthScreen(viewModel = authViewModel)
         }
     }
 }

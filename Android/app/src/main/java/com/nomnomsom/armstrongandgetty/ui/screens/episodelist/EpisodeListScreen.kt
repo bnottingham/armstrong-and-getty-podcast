@@ -1,5 +1,9 @@
 package com.nomnomsom.armstrongandgetty.ui.screens.episodelist
 
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
@@ -84,16 +89,33 @@ fun EpisodeListScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val authState by authViewModel.uiState.collectAsState()
 
+    val isAuthenticated = authState.user != null
+
+    // Launcher for Google Sign-In from the episode list (for guest users)
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.data != null) {
+            authViewModel.handleSignInResult(result.data)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header with user avatar
+        // Header with user avatar or sign-in button
         EpisodeListHeader(
+            isAuthenticated = isAuthenticated,
             photoUrl = authState.user?.photoUrl?.toString(),
             displayName = authState.user?.displayName,
-            onSignOut = { authViewModel.signOut() }
+            onSignOut = { authViewModel.signOut() },
+            onSignIn = {
+                authViewModel.clearError()
+                val signInIntent = authViewModel.getSignInIntent()
+                signInLauncher.launch(signInIntent)
+            }
         )
 
         // Now playing mini bar
@@ -142,9 +164,11 @@ fun EpisodeListScreen(
 
 @Composable
 private fun EpisodeListHeader(
+    isAuthenticated: Boolean,
     photoUrl: String?,
     displayName: String?,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onSignIn: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -184,63 +208,82 @@ private fun EpisodeListHeader(
             )
         }
 
-        // User avatar with dropdown
-        Box {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { showMenu = true },
-                contentAlignment = Alignment.Center
-            ) {
-                if (photoUrl != null) {
-                    AsyncImage(
-                        model = photoUrl,
-                        contentDescription = "Profile",
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = "Profile",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
+        if (isAuthenticated) {
+            // ── Signed-in: avatar with dropdown ──
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { showMenu = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (photoUrl != null) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Profile",
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Person,
+                            contentDescription = "Profile",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    if (displayName != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    displayName,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            },
+                            onClick = { },
+                            enabled = false
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Sign Out") },
+                        onClick = {
+                            showMenu = false
+                            onSignOut()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
                     )
                 }
             }
-
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+        } else {
+            // ── Guest: "Sign in" chip ──
+            OutlinedButton(
+                onClick = onSignIn,
+                modifier = Modifier.height(36.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding
             ) {
-                if (displayName != null) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                displayName,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        },
-                        onClick = { },
-                        enabled = false
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Sign Out") },
-                    onClick = {
-                        showMenu = false
-                        onSignOut()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+                Icon(
+                    Icons.Filled.Login,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
                 )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Sign in", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -321,12 +364,10 @@ private fun EpisodeDayCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row {
-                // Date badge
                 DateBadge(day.date)
                 Spacer(modifier = Modifier.width(14.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    // Title row
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = day.title,
@@ -341,7 +382,6 @@ private fun EpisodeDayCard(
                         }
                     }
 
-                    // Duration & segment count
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "${day.totalDurationMs.formatShortDuration()} · ${day.segmentCount} segments",
@@ -360,7 +400,6 @@ private fun EpisodeDayCard(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Summary
                     Text(
                         text = day.summary,
                         style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
@@ -372,7 +411,6 @@ private fun EpisodeDayCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // State-dependent bottom section
             when (downloadState) {
                 DownloadState.DOWNLOADED -> {
                     val progress = if (day.totalDurationMs > 0) {
