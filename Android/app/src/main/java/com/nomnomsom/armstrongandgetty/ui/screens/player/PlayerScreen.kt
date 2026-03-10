@@ -274,12 +274,9 @@ fun PlayerScreen(
                             transcripts = transcriptState.transcripts,
                             segments = segments,
                             currentSegmentIndex = currentSegmentIndex,
-                            positionInSegmentMs = playbackState.positionInSegmentMs,
-                            isTranscribing = transcriptState.isTranscribing,
-                            modelStatus = transcriptState.modelStatus,
-                            parseWords = { viewModel.parseTimedWords(it) },
-                            onTranscribeSegment = { segmentIndex ->
-                                viewModel.transcribeSegment(day.date, segmentIndex)
+                            isFetching = transcriptState.isFetching,
+                            onRetryFetchSegment = { segmentIndex ->
+                                viewModel.retryFetchSegment(day.date, segmentIndex)
                             }
                         )
                     }

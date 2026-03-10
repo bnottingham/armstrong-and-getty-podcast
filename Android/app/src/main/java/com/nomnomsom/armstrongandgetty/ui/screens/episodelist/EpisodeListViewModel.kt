@@ -14,9 +14,7 @@ import com.nomnomsom.armstrongandgetty.data.remote.ProgressSyncRepository
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
-import com.nomnomsom.armstrongandgetty.transcription.ModelStatus
 import com.nomnomsom.armstrongandgetty.transcription.TranscriptionManager
-import com.nomnomsom.armstrongandgetty.transcription.VoskModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,8 +30,7 @@ data class EpisodeListUiState(
 
 data class TranscriptUiState(
     val transcripts: List<TranscriptEntity> = emptyList(),
-    val isTranscribing: Boolean = false,
-    val modelStatus: ModelStatus = ModelStatus()
+    val isFetching: Boolean = false
 )
 
 @HiltViewModel
@@ -41,7 +38,6 @@ class EpisodeListViewModel @Inject constructor(
     private val repository: PodcastRepository,
     val playbackController: PlaybackController,
     private val transcriptionManager: TranscriptionManager,
-    private val voskModelManager: VoskModelManager,
     private val progressSyncRepository: ProgressSyncRepository,
     private val firebaseAuth: FirebaseAuth
 ) : ViewModel() {
@@ -58,8 +54,6 @@ class EpisodeListViewModel @Inject constructor(
     private val _transcriptState = MutableStateFlow(TranscriptUiState())
     val transcriptState: StateFlow<TranscriptUiState> = _transcriptState.asStateFlow()
 
-    val modelStatus: StateFlow<ModelStatus> = voskModelManager.status
-
     init {
         viewModelScope.launch {
             repository.observeAllDays().collect { days ->
@@ -70,6 +64,9 @@ class EpisodeListViewModel @Inject constructor(
         playbackController.connect()
         refreshFeed()
         syncRemoteProgressToLocal()
+
+        // Start background polling for missing transcriptions (every 30 min)
+        transcriptionManager.startBackgroundPolling()
     }
 
     fun refreshFeed() {
@@ -186,33 +183,57 @@ class EpisodeListViewModel @Inject constructor(
         return repository.parseSegments(day.segmentsJson)
     }
 
-    // ── Transcription ────────────────────────────────────
+    // ── Transcription (Remote Fetch) ─────────────────────
 
+    /**
+     * Observe transcripts for a day and automatically fetch any available from Firebase.
+     */
     fun observeTranscriptsForDay(date: String, segmentCount: Int) {
         viewModelScope.launch {
             transcriptionManager.resetStuckTranscripts(date)
-            transcriptionManager.observeTranscripts(date).collect { transcripts ->
-                val isTranscribing = transcripts.any { it.state == TranscriptState.TRANSCRIBING.value }
-                _transcriptState.value = TranscriptUiState(
-                    transcripts = transcripts,
-                    isTranscribing = isTranscribing,
-                    modelStatus = voskModelManager.status.value
-                )
+
+            // Start observing local DB changes
+            launch {
+                transcriptionManager.observeTranscripts(date).collect { transcripts ->
+                    _transcriptState.value = TranscriptUiState(
+                        transcripts = transcripts,
+                        isFetching = _transcriptState.value.isFetching
+                    )
+                }
             }
+
+            // Automatically try to fetch transcripts from Firebase
+            fetchTranscriptsForDay(date, segmentCount)
         }
     }
 
-    fun transcribeDay(date: String, segmentCount: Int) {
+    /**
+     * Fetch all available transcriptions for a day from Firebase.
+     */
+    fun fetchTranscriptsForDay(date: String, segmentCount: Int) {
         viewModelScope.launch {
-            _transcriptState.value = _transcriptState.value.copy(isTranscribing = true)
-            transcriptionManager.transcribeDay(date, segmentCount)
+            _transcriptState.value = _transcriptState.value.copy(isFetching = true)
+            try {
+                transcriptionManager.fetchTranscriptsForDay(date, segmentCount)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch transcripts for $date", e)
+            }
+            _transcriptState.value = _transcriptState.value.copy(isFetching = false)
         }
     }
 
-    fun transcribeSegment(date: String, segmentIndex: Int) {
+    /**
+     * Retry fetching a single segment's transcription from Firebase.
+     */
+    fun retryFetchSegment(date: String, segmentIndex: Int) {
         viewModelScope.launch {
-            _transcriptState.value = _transcriptState.value.copy(isTranscribing = true)
-            transcriptionManager.transcribeSegment(date, segmentIndex)
+            _transcriptState.value = _transcriptState.value.copy(isFetching = true)
+            try {
+                transcriptionManager.fetchSegmentTranscript(date, segmentIndex)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch transcript for $date seg$segmentIndex", e)
+            }
+            _transcriptState.value = _transcriptState.value.copy(isFetching = false)
         }
     }
 
@@ -269,6 +290,7 @@ class EpisodeListViewModel @Inject constructor(
     override fun onCleared() {
         saveListenProgress()
         playbackController.disconnect()
+        transcriptionManager.stopBackgroundPolling()
         super.onCleared()
     }
 }

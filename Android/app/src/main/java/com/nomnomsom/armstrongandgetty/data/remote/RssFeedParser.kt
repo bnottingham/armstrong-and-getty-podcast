@@ -26,14 +26,15 @@ class RssFeedParser @Inject constructor(
                 .header("User-Agent", "ArmstrongGettyPodcast/1.0")
                 .build()
 
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("HTTP ${response.code}"))
-            }
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
 
-            val body = response.body.string()
-            val items = parseRss(body)
-            Result.success(items)
+                val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty body"))
+                val items = parseRss(body)
+                Result.success(items)
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

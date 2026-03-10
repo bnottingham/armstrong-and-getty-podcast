@@ -1,172 +1,117 @@
 package com.nomnomsom.armstrongandgetty.transcription
 
+import android.util.Log
 import com.google.gson.Gson
+import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
 import com.nomnomsom.armstrongandgetty.data.local.TranscriptDao
-import com.nomnomsom.armstrongandgetty.data.model.TranscriptEntity
-import com.nomnomsom.armstrongandgetty.data.model.TranscriptState
+import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.TimedWord
-import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
+import com.nomnomsom.armstrongandgetty.data.model.TranscriptEntity
+import com.nomnomsom.armstrongandgetty.data.remote.TranscriptSyncRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Manages transcription state by fetching SRT files from Firebase Firestore.
+ *
+ * No local transcription — the Python server does the heavy lifting and uploads
+ * SRT files to Firestore. This manager:
+ * 1. Automatically fetches transcriptions for downloaded days that don't have them
+ * 2. Periodically re-checks every 30 minutes for missing segment transcriptions
+ * 3. Provides a manual retry for individual segments
+ *
+ * No auth required — transcriptions are a shared public resource.
+ */
 @Singleton
 class TranscriptionManager @Inject constructor(
     private val transcriptDao: TranscriptDao,
-    private val transcriptionEngine: TranscriptionEngine,
-    private val modelManager: VoskModelManager,
-    private val audioDownloader: AudioDownloader,
+    private val podcastDayDao: PodcastDayDao,
+    private val transcriptSyncRepository: TranscriptSyncRepository,
     private val gson: Gson
 ) {
+    companion object {
+        private const val TAG = "TranscriptionMgr"
+        private const val POLL_INTERVAL_MS = 30L * 60 * 1000 // 30 minutes
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var pollingJob: Job? = null
+
+    /**
+     * Start background polling for missing transcriptions.
+     * Checks all downloaded days that are missing transcripts every 30 minutes.
+     */
+    fun startBackgroundPolling() {
+        if (pollingJob?.isActive == true) return
+
+        pollingJob = scope.launch {
+            while (true) {
+                try {
+                    fetchMissingTranscriptsForAllDays()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Background polling error", e)
+                }
+                delay(POLL_INTERVAL_MS)
+            }
+        }
+        Log.d(TAG, "Background transcript polling started (every 30 min)")
+    }
+
+    fun stopBackgroundPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+    }
+
     fun observeTranscripts(date: String): Flow<List<TranscriptEntity>> =
         transcriptDao.observeTranscriptsForDay(date)
-
-    suspend fun resetStuckTranscripts(date: String) {
-        transcriptDao.resetStuckTranscripts(date)
-    }
 
     suspend fun getTranscripts(date: String): List<TranscriptEntity> =
         transcriptDao.getTranscriptsForDay(date)
 
     /**
-     * Transcribe all segments for a day. Skips already-completed segments.
-     * Downloads the Vosk model if not present.
+     * Fetch all available transcriptions for a specific day.
+     * Called when the user enters the player screen.
      */
-    suspend fun transcribeDay(date: String, segmentCount: Int): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            // Ensure model is downloaded
-            if (!modelManager.isModelReady()) {
-                val dlResult = modelManager.downloadModel()
-                if (dlResult.isFailure) return@withContext Result.failure(dlResult.exceptionOrNull()!!)
-            }
-
-            // Ensure model is loaded
-            val loadResult = transcriptionEngine.ensureModelLoaded()
-            if (loadResult.isFailure) return@withContext Result.failure(loadResult.exceptionOrNull()!!)
-
-            val segmentFiles = audioDownloader.getSegmentFiles(date, segmentCount)
-
-            for (index in 0 until segmentCount) {
-                val transcriptId = "${date}_seg${index}"
-
-                // Skip if already done
-                val existing = transcriptDao.getTranscript(transcriptId)
-                if (existing != null && existing.state == TranscriptState.DONE.value) continue
-
-                // Create or update entry as "transcribing"
-                transcriptDao.insertOrReplace(
-                    TranscriptEntity(
-                        id = transcriptId,
-                        date = date,
-                        segmentIndex = index,
-                        wordsJson = "[]",
-                        fullText = "",
-                        state = TranscriptState.TRANSCRIBING.value,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                )
-
-                val filePath = segmentFiles.getOrNull(index)
-                if (filePath == null || !java.io.File(filePath).exists()) {
-                    transcriptDao.updateState(transcriptId, TranscriptState.ERROR.value)
-                    continue
-                }
-
-                // Run transcription
-                val result = transcriptionEngine.transcribe(filePath)
-
-                if (result.isSuccess) {
-                    val words = result.getOrThrow()
-                    val wordsJson = gson.toJson(words)
-                    val fullText = words.joinToString(" ") { it.word }
-
-                    transcriptDao.updateComplete(
-                        id = transcriptId,
-                        state = TranscriptState.DONE.value,
-                        wordsJson = wordsJson,
-                        fullText = fullText,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                } else {
-                    transcriptDao.updateState(transcriptId, TranscriptState.ERROR.value)
-                }
-            }
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+    suspend fun fetchTranscriptsForDay(date: String, segmentCount: Int): Int =
+        withContext(Dispatchers.IO) {
+            transcriptSyncRepository.fetchAllSegmentsForDay(date, segmentCount)
         }
-    }
 
     /**
-     * Transcribe a single segment on demand.
-     * Downloads the Vosk model if not present.
+     * Retry fetching a single segment's transcription.
+     * Called when the user taps the "Retry" button.
      */
-    suspend fun transcribeSegment(date: String, segmentIndex: Int): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun fetchSegmentTranscript(date: String, segmentIndex: Int): Boolean =
+        withContext(Dispatchers.IO) {
+            transcriptSyncRepository.fetchSegmentTranscript(date, segmentIndex)
+        }
+
+    /**
+     * Fetch missing transcripts for ALL downloaded days.
+     * This is called periodically by the background polling job.
+     */
+    private suspend fun fetchMissingTranscriptsForAllDays() {
         try {
-            // Ensure model is downloaded
-            if (!modelManager.isModelReady()) {
-                val dlResult = modelManager.downloadModel()
-                if (dlResult.isFailure) return@withContext Result.failure(dlResult.exceptionOrNull()!!)
+            val allDays = podcastDayDao.getAllDownloadedDays()
+
+            for (day in allDays) {
+                val localCount = transcriptSyncRepository.getLocalTranscriptCount(day.date)
+                if (localCount < day.segmentCount) {
+                    Log.d(TAG, "Fetching missing transcripts for ${day.date} " +
+                            "(have $localCount/${day.segmentCount})")
+                    transcriptSyncRepository.fetchAllSegmentsForDay(day.date, day.segmentCount)
+                }
             }
-
-            // Ensure model is loaded
-            val loadResult = transcriptionEngine.ensureModelLoaded()
-            if (loadResult.isFailure) return@withContext Result.failure(loadResult.exceptionOrNull()!!)
-
-            val transcriptId = "${date}_seg${segmentIndex}"
-
-            // Skip if already done
-            val existing = transcriptDao.getTranscript(transcriptId)
-            if (existing != null && existing.state == TranscriptState.DONE.value) {
-                return@withContext Result.success(Unit)
-            }
-
-            // Create or update entry as "transcribing"
-            transcriptDao.insertOrReplace(
-                TranscriptEntity(
-                    id = transcriptId,
-                    date = date,
-                    segmentIndex = segmentIndex,
-                    wordsJson = "[]",
-                    fullText = "",
-                    state = TranscriptState.TRANSCRIBING.value,
-                    lastUpdated = System.currentTimeMillis()
-                )
-            )
-
-            // Find the file — we need to figure out total segment count from what's on disk
-            val segmentFiles = audioDownloader.getSegmentFiles(date, segmentIndex + 1)
-            val filePath = segmentFiles.getOrNull(segmentIndex)
-            if (filePath == null || !java.io.File(filePath).exists()) {
-                transcriptDao.updateState(transcriptId, TranscriptState.ERROR.value)
-                return@withContext Result.failure(Exception("Segment file not found"))
-            }
-
-            // Run transcription
-            val result = transcriptionEngine.transcribe(filePath)
-
-            if (result.isSuccess) {
-                val words = result.getOrThrow()
-                val wordsJson = gson.toJson(words)
-                val fullText = words.joinToString(" ") { it.word }
-
-                transcriptDao.updateComplete(
-                    id = transcriptId,
-                    state = TranscriptState.DONE.value,
-                    wordsJson = wordsJson,
-                    fullText = fullText,
-                    lastUpdated = System.currentTimeMillis()
-                )
-            } else {
-                transcriptDao.updateState(transcriptId, TranscriptState.ERROR.value)
-            }
-
-            Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(e)
+            Log.e(TAG, "Error fetching missing transcripts", e)
         }
     }
 
@@ -189,7 +134,11 @@ class TranscriptionManager @Inject constructor(
         return transcriptDao.getCompletedCountForDay(date) > 0
     }
 
-    suspend fun isTranscribing(date: String): Boolean {
-        return transcriptDao.getTranscribingCountForDay(date) > 0
+    /**
+     * Reset stuck transcripts (shouldn't happen with remote fetching,
+     * but kept for safety).
+     */
+    suspend fun resetStuckTranscripts(date: String) {
+        transcriptDao.resetStuckTranscripts(date)
     }
 }
