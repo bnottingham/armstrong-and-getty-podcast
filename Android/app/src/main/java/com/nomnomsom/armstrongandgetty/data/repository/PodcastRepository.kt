@@ -26,6 +26,8 @@ class PodcastRepository @Inject constructor(
 ) {
     fun observeAllDays(): Flow<List<PodcastDay>> = dao.getAllDays()
 
+    suspend fun getAllDaysSnapshot(): List<PodcastDay> = dao.getAllDaysSnapshot()
+
     fun observeDay(date: String): Flow<PodcastDay?> = dao.observeDay(date)
 
     suspend fun getDayByDate(date: String): PodcastDay? = dao.getDayByDate(date)

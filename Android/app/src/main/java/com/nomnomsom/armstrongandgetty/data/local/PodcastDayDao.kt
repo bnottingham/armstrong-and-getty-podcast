@@ -14,6 +14,9 @@ interface PodcastDayDao {
     @Query("SELECT * FROM podcast_days ORDER BY date DESC")
     fun getAllDays(): Flow<List<PodcastDay>>
 
+    @Query("SELECT * FROM podcast_days ORDER BY date DESC")
+    suspend fun getAllDaysSnapshot(): List<PodcastDay>
+
     @Query("SELECT * FROM podcast_days WHERE downloadState = 'downloaded' ORDER BY date DESC")
     suspend fun getAllDownloadedDays(): List<PodcastDay>
 
