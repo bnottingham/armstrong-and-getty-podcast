@@ -28,16 +28,22 @@
             </intent-filter>
         </activity>
 
-        <!-- Media playback service for background audio, lock screen, notifications -->
+        <!-- Media playback service: background audio, lock screen, notifications, AND Android Auto -->
         <service
             android:name="com.nomnomsom.armstrongandgetty.media.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService">
             <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto: declare this as a media app -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
     </application>
 

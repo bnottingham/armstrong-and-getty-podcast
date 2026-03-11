@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "com.nomnomsom.armstrongandgetty"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.nomnomsom.armstrongandgetty"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -99,7 +99,9 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
 
-    
+    // Coroutines-Guava bridge (for MediaLibraryService async callbacks)
+    implementation(libs.kotlinx.coroutines.guava)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
