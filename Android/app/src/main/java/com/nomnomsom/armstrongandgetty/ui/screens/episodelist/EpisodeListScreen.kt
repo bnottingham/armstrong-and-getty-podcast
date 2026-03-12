@@ -162,7 +162,10 @@ fun EpisodeListScreen(
                             playbackState = playbackState,
                             isActivePlayback = isActivePlayback,
                             onTap = { onEpisodeClick(nowPlayingDay) },
-                            onTogglePlay = { viewModel.togglePlayPause() },
+                            onTogglePlay = {
+                                if (isActivePlayback) viewModel.togglePlayPause()
+                                else viewModel.playDay(nowPlayingDay)
+                            },
                             onSkipBack = { viewModel.seekRelative(-30_000) },
                             onSkipForward = { viewModel.seekRelative(30_000) }
                         )

@@ -141,6 +141,49 @@ class PlaybackController @Inject constructor(
         }
     }
 
+    /**
+     * Append new segments to the current playlist without interrupting playback.
+     * Called when new segments are downloaded for the currently-playing day.
+     */
+    fun appendToPlaylist(
+        dayTitle: String,
+        newSegmentFilePaths: List<String>,
+        newSegmentTitles: List<String>,
+        newActualDurations: List<Long>
+    ) {
+        val ctrl = controller ?: return
+
+        // Extend duration bookkeeping
+        segmentDurations = segmentDurations + newActualDurations
+        segmentStartMs = buildList {
+            var cumulative = 0L
+            for (dur in segmentDurations) {
+                add(cumulative)
+                cumulative += dur
+            }
+        }
+
+        // Build new MediaItems and append to ExoPlayer playlist
+        val existingCount = ctrl.mediaItemCount
+        val mediaItems = newSegmentFilePaths.mapIndexed { i, path ->
+            val segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" }
+            MediaItem.Builder()
+                .setUri(Uri.parse("file://$path"))
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("$dayTitle — $segTitle")
+                        .setArtist("Armstrong & Getty")
+                        .setAlbumTitle("Armstrong & Getty On Demand")
+                        .setTrackNumber(existingCount + i + 1)
+                        .build()
+                )
+                .build()
+        }
+
+        ctrl.addMediaItems(mediaItems)
+        updateState()
+    }
+
     fun resume() {
         controller?.play()
     }

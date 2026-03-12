@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +21,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -101,6 +104,18 @@ fun AGPodcastNavigation(authViewModel: AuthViewModel) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Track X tab visibility for polling interval changes
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == "xfeed") {
+            xFeedViewModel.onTabVisible()
+        } else {
+            xFeedViewModel.onTabHidden()
+        }
+    }
+
+    // Observe unread count for the X tab badge
+    val xUnreadCount by xFeedViewModel.unreadCount.collectAsState()
+
     // Only show bottom bar on the top-level tab screens
     val showBottomBar = currentRoute in bottomTabs.map { it.route }
 
@@ -128,10 +143,32 @@ fun AGPodcastNavigation(authViewModel: AuthViewModel) {
                                 }
                             },
                             icon = {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label
-                                )
+                                if (tab is BottomTab.XFeed && xUnreadCount > 0) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge(
+                                                containerColor = Gold,
+                                                contentColor = MaterialTheme.colorScheme.surface
+                                            ) {
+                                                Text(
+                                                    text = if (xUnreadCount > 99) "99+" else xUnreadCount.toString(),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = tab.icon,
+                                            contentDescription = tab.label
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = tab.label
+                                    )
+                                }
                             },
                             label = {
                                 Text(

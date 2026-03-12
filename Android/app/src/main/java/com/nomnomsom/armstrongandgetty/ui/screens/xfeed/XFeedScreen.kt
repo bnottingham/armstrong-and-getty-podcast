@@ -8,7 +8,13 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,8 +26,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -29,10 +38,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +65,7 @@ fun XFeedScreen(
     viewModel: XFeedViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val newPostsWhileViewing by viewModel.newPostsWhileViewing.collectAsState()
 
     Column(
         modifier = Modifier
@@ -90,24 +106,95 @@ fun XFeedScreen(
             }
 
             uiState.items.isNotEmpty() -> {
-                PullToRefreshBox(
-                    isRefreshing = uiState.isRefreshing,
-                    onRefresh = { viewModel.refresh() },
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    val refreshKey = remember(uiState.items) {
-                        uiState.items.hashCode()
+                // Track whether the WebView is scrolled to the top so we can
+                // let PullToRefreshBox intercept the downward drag.
+                var webViewAtTop by remember { mutableStateOf(true) }
+
+                // Passthrough nested scroll connection — we don't consume
+                // anything here, but wiring it enables the nested scroll chain
+                // so PullToRefreshBox can intercept when the WebView allows it.
+                val nestedScrollConnection = remember {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(
+                            available: Offset,
+                            source: NestedScrollSource
+                        ): Offset = Offset.Zero
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PullToRefreshBox(
+                        isRefreshing = uiState.isRefreshing,
+                        onRefresh = { viewModel.refresh() },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val refreshKey = remember(uiState.items) {
+                            uiState.items.hashCode()
+                        }
+
+                        key(refreshKey) {
+                            TweetFeedWebView(
+                                items = uiState.items,
+                                onScrollChanged = { scrollY ->
+                                    webViewAtTop = scrollY == 0
+                                },
+                                enableParentScroll = webViewAtTop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(nestedScrollConnection)
+                            )
+                        }
                     }
 
-                    key(refreshKey) {
-                        TweetFeedWebView(
-                            items = uiState.items,
-                            modifier = Modifier.fillMaxSize()
+                    // "New posts" banner — slides in from the top when new posts arrive while viewing
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = newPostsWhileViewing > 0,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                    ) {
+                        NewPostsBanner(
+                            count = newPostsWhileViewing,
+                            onClick = {
+                                viewModel.dismissNewPostsBanner()
+                                viewModel.refresh()
+                            }
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NewPostsBanner(
+    count: Int,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(Gold)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Filled.ArrowUpward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$count new post${if (count != 1) "s" else ""}",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.surface
+        )
     }
 }
 
@@ -155,10 +242,17 @@ private fun XFeedHeader() {
  * A postMessage listener catches resize events from each iframe and
  * adjusts the iframe height so every tweet displays fully without cutoff.
  * The whole page scrolls naturally inside the WebView.
+ *
+ * @param onScrollChanged reports the WebView's vertical scroll offset so
+ *        the parent can enable pull-to-refresh only when scrolled to the top.
+ * @param enableParentScroll when true, the WebView disables its overscroll
+ *        and allows the parent (PullToRefreshBox) to intercept the downward drag.
  */
 @Composable
 private fun TweetFeedWebView(
     items: List<XFeedItem>,
+    onScrollChanged: (Int) -> Unit,
+    enableParentScroll: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -169,7 +263,37 @@ private fun TweetFeedWebView(
 
     AndroidView(
         factory = { ctx ->
-            WebView(ctx).apply {
+            object : WebView(ctx) {
+                override fun overScrollBy(
+                    deltaX: Int, deltaY: Int,
+                    scrollX: Int, scrollY: Int,
+                    scrollRangeX: Int, scrollRangeY: Int,
+                    maxOverScrollX: Int, maxOverScrollY: Int,
+                    isTouchEvent: Boolean
+                ): Boolean {
+                    onScrollChanged(scrollY + deltaY)
+                    return super.overScrollBy(
+                        deltaX, deltaY,
+                        scrollX, scrollY,
+                        scrollRangeX, scrollRangeY,
+                        maxOverScrollX, maxOverScrollY,
+                        isTouchEvent
+                    )
+                }
+
+                override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+                    super.onScrollChanged(l, t, oldl, oldt)
+                    onScrollChanged(t)
+                }
+
+                override fun onOverScrolled(
+                    scrollX: Int, scrollY: Int,
+                    clampedX: Boolean, clampedY: Boolean
+                ) {
+                    super.onOverScrolled(scrollX, scrollY, clampedX, clampedY)
+                    onScrollChanged(scrollY)
+                }
+            }.apply {
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -220,6 +344,18 @@ private fun TweetFeedWebView(
                     null
                 )
             }
+        },
+        update = { webView ->
+            // When the WebView is at the top, disable its own overscroll so the
+            // parent PullToRefreshBox can intercept the downward drag gesture.
+            webView.overScrollMode = if (enableParentScroll) {
+                WebView.OVER_SCROLL_NEVER
+            } else {
+                WebView.OVER_SCROLL_IF_CONTENT_SCROLLS
+            }
+            // Tell the parent ViewGroup it's OK to intercept touch events
+            // when the WebView is scrolled to the top (for pull-to-refresh).
+            webView.parent?.requestDisallowInterceptTouchEvent(!enableParentScroll)
         },
         modifier = modifier
     )

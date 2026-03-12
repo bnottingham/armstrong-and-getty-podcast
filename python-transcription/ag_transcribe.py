@@ -478,7 +478,7 @@ def transcribe_one_segment(
             language="en",
             task="transcribe",
             beam_size=5,
-            vad_filter=True,  # Skip silence for speed
+            vad_filter=False,  # Disabled — transcribe everything including commercials
         )
 
         # Collect segments and update progress based on timestamps

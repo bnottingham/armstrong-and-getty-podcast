@@ -283,7 +283,38 @@ class EpisodeListViewModel @Inject constructor(
 
     fun checkForNewSegments(date: String) {
         viewModelScope.launch {
-            repository.appendNewSegments(date)
+            // Snapshot segment count before refresh so we know what's new
+            val dayBefore = repository.getDayByDate(date) ?: return@launch
+            val previousSegmentCount = repository.parseSegments(dayBefore.segmentsJson).size
+
+            val result = repository.appendNewSegments(date)
+
+            // If this day is currently loaded in the player, append new segments to the live playlist
+            if (result.isSuccess && playbackState.value.currentDayDate == date) {
+                val updatedDay = repository.getDayByDate(date) ?: return@launch
+                val updatedSegments = repository.parseSegments(updatedDay.segmentsJson)
+
+                if (updatedSegments.size > previousSegmentCount) {
+                    val newSegments = updatedSegments.subList(previousSegmentCount, updatedSegments.size)
+                    val allFilePaths = repository.getSegmentFilePaths(date, updatedSegments.size)
+                    val newFilePaths = allFilePaths.subList(previousSegmentCount, allFilePaths.size)
+                    val newTitles = newSegments.map { seg ->
+                        if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
+                    }
+                    val newDurations = newSegments.map { seg ->
+                        if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
+                    }
+
+                    playbackController.appendToPlaylist(
+                        dayTitle = updatedDay.title,
+                        newSegmentFilePaths = newFilePaths,
+                        newSegmentTitles = newTitles,
+                        newActualDurations = newDurations
+                    )
+
+                    Log.d(TAG, "Appended ${newSegments.size} new segment(s) to live playlist for $date")
+                }
+            }
         }
     }
 
