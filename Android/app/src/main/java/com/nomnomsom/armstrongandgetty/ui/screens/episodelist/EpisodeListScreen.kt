@@ -157,10 +157,34 @@ fun EpisodeListScreen(
                 }
                 item(key = "now_playing_card") {
                     if (nowPlayingDay != null) {
+                        // Compute current segment label
+                        val segments = remember(nowPlayingDay.segmentsJson) {
+                            viewModel.getSegmentsForDay(nowPlayingDay)
+                        }
+                        val currentSegmentLabel = if (isActivePlayback && segments.isNotEmpty()) {
+                            val seg = segments.getOrNull(playbackState.currentSegmentIndex)
+                            seg?.let {
+                                if (it.hour == "OMT") "OMT: ${it.title}" else "Hr ${it.hour}: ${it.title}"
+                            }
+                        } else if (segments.isNotEmpty()) {
+                            // Cold start — figure out which segment from saved position
+                            var remaining = nowPlayingDay.listenedPositionMs
+                            var segIdx = 0
+                            for (i in segments.indices) {
+                                val dur = segments[i].actualDurationMs.takeIf { it > 0 } ?: segments[i].durationMs
+                                if (remaining < dur) { segIdx = i; break }
+                                remaining -= dur
+                                segIdx = i
+                            }
+                            val seg = segments[segIdx]
+                            if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
+                        } else null
+
                         NowPlayingCard(
                             day = nowPlayingDay,
                             playbackState = playbackState,
                             isActivePlayback = isActivePlayback,
+                            currentSegmentLabel = currentSegmentLabel,
                             onTap = { onEpisodeClick(nowPlayingDay) },
                             onTogglePlay = {
                                 if (isActivePlayback) viewModel.togglePlayPause()
@@ -347,6 +371,7 @@ private fun NowPlayingCard(
     day: PodcastDay,
     playbackState: PlaybackState,
     isActivePlayback: Boolean,
+    currentSegmentLabel: String?,
     onTap: () -> Unit,
     onTogglePlay: () -> Unit,
     onSkipBack: () -> Unit,
@@ -381,6 +406,17 @@ private fun NowPlayingCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (currentSegmentLabel != null) {
+                        Text(
+                            text = currentSegmentLabel,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
                         text = when {
                             isActivePlayback && playbackState.isPlaying -> "● Playing"
