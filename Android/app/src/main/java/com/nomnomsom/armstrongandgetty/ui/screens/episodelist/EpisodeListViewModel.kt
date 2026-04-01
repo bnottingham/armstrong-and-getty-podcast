@@ -22,6 +22,13 @@ data class EpisodeListUiState(
     val error: String? = null
 )
 
+data class DownloadProgress(
+    val currentSegment: Int,       // 0-based index of the segment being downloaded
+    val totalSegments: Int,        // total segment count for the day
+    val segmentBytesDownloaded: Long,
+    val segmentTotalBytes: Long    // -1 if unknown
+)
+
 @HiltViewModel
 class EpisodeListViewModel @Inject constructor(
     private val repository: PodcastRepository,
@@ -36,6 +43,9 @@ class EpisodeListViewModel @Inject constructor(
     val uiState: StateFlow<EpisodeListUiState> = _uiState.asStateFlow()
 
     val playbackState: StateFlow<PlaybackState> = playbackController.playbackState
+
+    private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -75,7 +85,16 @@ class EpisodeListViewModel @Inject constructor(
 
     fun downloadDay(date: String) {
         viewModelScope.launch {
-            repository.downloadDay(date)
+            repository.downloadDay(date) { segmentIndex, segmentCount, bytesDownloaded, totalBytes ->
+                _downloadProgress.value = _downloadProgress.value + (date to DownloadProgress(
+                    currentSegment = segmentIndex,
+                    totalSegments = segmentCount,
+                    segmentBytesDownloaded = bytesDownloaded,
+                    segmentTotalBytes = totalBytes
+                ))
+            }
+            // Clear progress when download completes (success or failure)
+            _downloadProgress.value = _downloadProgress.value - date
         }
     }
 

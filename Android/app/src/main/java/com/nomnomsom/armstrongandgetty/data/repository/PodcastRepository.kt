@@ -8,6 +8,7 @@ import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
+import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
@@ -103,7 +104,10 @@ class PodcastRepository @Inject constructor(
         return Result.success(latestDate)
     }
 
-    suspend fun downloadDay(date: String): Result<String> {
+    suspend fun downloadDay(
+        date: String,
+        onProgress: DownloadProgressCallback? = null
+    ): Result<String> {
         val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
         val segments = parseSegments(day.segmentsJson)
         if (segments.isEmpty()) return Result.failure(Exception("No segments"))
@@ -120,7 +124,8 @@ class PodcastRepository @Inject constructor(
         val downloadResult = audioDownloader.downloadSegments(
             date = date,
             segments = segments,
-            existingSegmentCount = existingOnDisk
+            existingSegmentCount = existingOnDisk,
+            onProgress = onProgress
         )
 
         return if (downloadResult.isSuccess) {

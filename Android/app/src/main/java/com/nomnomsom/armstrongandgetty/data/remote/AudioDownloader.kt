@@ -18,6 +18,15 @@ data class DownloadResult(
     val segmentActualDurationsMs: List<Long>
 )
 
+/**
+ * Callback for download progress.
+ * @param segmentIndex 0-based index of the segment currently downloading
+ * @param segmentCount total number of segments for this day
+ * @param bytesDownloaded bytes downloaded for the current segment so far
+ * @param totalBytes total bytes for the current segment (-1 if unknown)
+ */
+typealias DownloadProgressCallback = (segmentIndex: Int, segmentCount: Int, bytesDownloaded: Long, totalBytes: Long) -> Unit
+
 @Singleton
 class AudioDownloader @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -33,16 +42,19 @@ class AudioDownloader @Inject constructor(
      * @param date The date string key e.g. "2026-03-05"
      * @param segments The list of segments to download
      * @param existingSegmentCount How many segments are already downloaded for this day
+     * @param onProgress Optional callback for per-segment byte-level progress
      * @return DownloadResult with file paths and measured durations for ALL segments
      */
     suspend fun downloadSegments(
         date: String,
         segments: List<Segment>,
-        existingSegmentCount: Int = 0
+        existingSegmentCount: Int = 0,
+        onProgress: DownloadProgressCallback? = null
     ): Result<DownloadResult> = withContext(Dispatchers.IO) {
         try {
             val allPaths = mutableListOf<String>()
             val allDurations = mutableListOf<Long>()
+            val totalSegments = segments.size
 
             for ((index, segment) in segments.withIndex()) {
                 val segFile = File(podcastDir, "ag_${date}_seg${index}.mp3")
@@ -56,9 +68,13 @@ class AudioDownloader @Inject constructor(
                         measureDuration(segFile)
                     }
                     allDurations.add(dur)
+                    // Report as fully complete for this segment
+                    onProgress?.invoke(index, totalSegments, segFile.length(), segFile.length())
                 } else {
-                    // Download new segment
-                    downloadFile(segment.audioUrl, segFile)
+                    // Download new segment with progress
+                    downloadFile(segment.audioUrl, segFile) { bytesDownloaded, totalBytes ->
+                        onProgress?.invoke(index, totalSegments, bytesDownloaded, totalBytes)
+                    }
                     allPaths.add(segFile.absolutePath)
                     allDurations.add(measureDuration(segFile))
                 }
@@ -70,7 +86,11 @@ class AudioDownloader @Inject constructor(
         }
     }
 
-    private fun downloadFile(url: String, destination: File) {
+    private fun downloadFile(
+        url: String,
+        destination: File,
+        onProgress: ((bytesDownloaded: Long, totalBytes: Long) -> Unit)? = null
+    ) {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "ArmstrongGettyPodcast/1.0")
@@ -79,11 +99,22 @@ class AudioDownloader @Inject constructor(
         val response = okHttpClient.newCall(request).execute()
         if (!response.isSuccessful) throw Exception("Download failed: HTTP ${response.code}")
 
-        response.body?.byteStream()?.use { input ->
+        val body = response.body ?: throw Exception("Empty response body")
+        val totalBytes = body.contentLength() // -1 if unknown
+
+        body.byteStream().use { input ->
             FileOutputStream(destination).use { output ->
-                input.copyTo(output, bufferSize = 8192)
+                val buffer = ByteArray(8192)
+                var bytesDownloaded = 0L
+                var read: Int
+
+                while (input.read(buffer).also { read = it } != -1) {
+                    output.write(buffer, 0, read)
+                    bytesDownloaded += read
+                    onProgress?.invoke(bytesDownloaded, totalBytes)
+                }
             }
-        } ?: throw Exception("Empty response body")
+        }
     }
 
     private fun measureDuration(file: File): Long {

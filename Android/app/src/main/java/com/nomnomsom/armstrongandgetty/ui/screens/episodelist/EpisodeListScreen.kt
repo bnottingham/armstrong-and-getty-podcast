@@ -80,6 +80,7 @@ fun EpisodeListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
+    val downloadProgressMap by viewModel.downloadProgress.collectAsState()
 
     // Determine what to show in the Now Playing tile:
     // 1. Currently active playback (player is ready with a day loaded)
@@ -182,6 +183,7 @@ fun EpisodeListScreen(
                         // Show live position from player if this day is active
                         livePositionMs = if (isThisDayPlaying) playbackState.currentPositionMs else null,
                         liveDurationMs = if (isThisDayPlaying) playbackState.durationMs else null,
+                        downloadProgress = downloadProgressMap[day.date],
                         onClick = {
                             if (day.downloadState == DownloadState.DOWNLOADED.value) {
                                 onEpisodeClick(day)
@@ -497,6 +499,7 @@ private fun EpisodeDayCard(
     isPlaying: Boolean,
     livePositionMs: Long?,
     liveDurationMs: Long?,
+    downloadProgress: DownloadProgress?,
     onClick: () -> Unit,
     onDownload: () -> Unit,
     onReset: () -> Unit,
@@ -683,17 +686,30 @@ private fun EpisodeDayCard(
                 }
 
                 DownloadState.DOWNLOADING -> {
+                    val segNum = (downloadProgress?.currentSegment ?: 0) + 1
+                    val segTotal = downloadProgress?.totalSegments ?: day.segmentCount
+                    val segFraction = if (downloadProgress != null && downloadProgress.segmentTotalBytes > 0) {
+                        downloadProgress.segmentBytesDownloaded.toFloat() / downloadProgress.segmentTotalBytes
+                    } else 0f
+                    // Overall = (completed segments + current segment fraction) / total
+                    val overallProgress = if (segTotal > 0) {
+                        ((segNum - 1) + segFraction) / segTotal
+                    } else 0f
+                    val segPercent = (segFraction * 100).toInt()
+
                     LinearProgressIndicator(
+                        progress = { overallProgress.coerceIn(0f, 1f) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = Gold.copy(alpha = 0.6f),
-                        trackColor = MaterialTheme.colorScheme.outline
+                        color = Gold,
+                        trackColor = MaterialTheme.colorScheme.outline,
+                        strokeCap = StrokeCap.Round
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Downloading segments…",
+                        text = "Downloading segment $segNum of $segTotal — $segPercent%",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
