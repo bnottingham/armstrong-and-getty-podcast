@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -24,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -37,8 +35,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.nomnomsom.armstrongandgetty.ui.screens.auth.AuthScreen
-import com.nomnomsom.armstrongandgetty.ui.screens.auth.AuthViewModel
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
@@ -47,7 +43,6 @@ import com.nomnomsom.armstrongandgetty.ui.screens.xfeed.XFeedViewModel
 import com.nomnomsom.armstrongandgetty.ui.theme.AGPodcastTheme
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
 import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
-import com.nomnomsom.armstrongandgetty.ui.theme.TextSecondary
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -57,31 +52,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AGPodcastTheme {
-                AppRoot()
+                AGPodcastNavigation()
             }
-        }
-    }
-}
-
-@Composable
-fun AppRoot() {
-    val authViewModel: AuthViewModel = hiltViewModel()
-    val authState by authViewModel.uiState.collectAsState()
-
-    when {
-        authState.isLoading -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Gold)
-            }
-        }
-        authState.user != null || authState.skippedAuth -> {
-            AGPodcastNavigation(authViewModel = authViewModel)
-        }
-        else -> {
-            AuthScreen(viewModel = authViewModel)
         }
     }
 }
@@ -96,7 +68,7 @@ private sealed class BottomTab(val route: String, val label: String, val icon: I
 private val bottomTabs = listOf(BottomTab.Podcast, BottomTab.XFeed)
 
 @Composable
-fun AGPodcastNavigation(authViewModel: AuthViewModel) {
+fun AGPodcastNavigation() {
     val navController = rememberNavController()
     val episodeListViewModel: EpisodeListViewModel = hiltViewModel()
     val xFeedViewModel: XFeedViewModel = hiltViewModel()
@@ -200,7 +172,6 @@ fun AGPodcastNavigation(authViewModel: AuthViewModel) {
             composable("episodes") {
                 EpisodeListScreen(
                     viewModel = episodeListViewModel,
-                    authViewModel = authViewModel,
                     onEpisodeClick = { day ->
                         navController.navigate("player/${day.date}")
                     }

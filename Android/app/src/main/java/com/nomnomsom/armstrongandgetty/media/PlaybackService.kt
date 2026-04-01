@@ -26,7 +26,6 @@ import com.google.gson.reflect.TypeToken
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.Segment
-import com.nomnomsom.armstrongandgetty.data.remote.ProgressSyncRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +42,6 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var dao: PodcastDayDao
     @Inject lateinit var gson: Gson
-    @Inject lateinit var progressSyncRepository: ProgressSyncRepository
 
     private var mediaSession: MediaLibrarySession? = null
     private var exoPlayer: ExoPlayer? = null
@@ -92,7 +90,7 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(pendingIntent)
             .build()
 
-        // Periodically save progress (covers Android Auto playback without in-app UI)
+        // Periodically save progress locally (covers Android Auto playback without in-app UI)
         serviceScope.launch {
             while (true) {
                 delay(10_000) // Every 10 seconds
@@ -112,7 +110,6 @@ class PlaybackService : MediaLibraryService() {
                         val isListened = duration > 0 && posMs >= duration - 5000
 
                         dao.updateListenProgress(date, posMs, isListened)
-                        progressSyncRepository.pushProgress(date, posMs, isListened)
                     }
                 }
             }

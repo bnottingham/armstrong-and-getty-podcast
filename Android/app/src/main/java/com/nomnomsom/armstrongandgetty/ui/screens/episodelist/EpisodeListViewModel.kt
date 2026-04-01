@@ -3,18 +3,12 @@ package com.nomnomsom.armstrongandgetty.ui.screens.episodelist
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
-import com.nomnomsom.armstrongandgetty.data.model.TimedWord
-import com.nomnomsom.armstrongandgetty.data.model.TranscriptEntity
-import com.nomnomsom.armstrongandgetty.data.model.TranscriptState
-import com.nomnomsom.armstrongandgetty.data.remote.ProgressSyncRepository
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
-import com.nomnomsom.armstrongandgetty.transcription.TranscriptionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,18 +22,10 @@ data class EpisodeListUiState(
     val error: String? = null
 )
 
-data class TranscriptUiState(
-    val transcripts: List<TranscriptEntity> = emptyList(),
-    val isFetching: Boolean = false
-)
-
 @HiltViewModel
 class EpisodeListViewModel @Inject constructor(
     private val repository: PodcastRepository,
-    val playbackController: PlaybackController,
-    private val transcriptionManager: TranscriptionManager,
-    private val progressSyncRepository: ProgressSyncRepository,
-    private val firebaseAuth: FirebaseAuth
+    val playbackController: PlaybackController
 ) : ViewModel() {
 
     companion object {
@@ -51,9 +37,6 @@ class EpisodeListViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = playbackController.playbackState
 
-    private val _transcriptState = MutableStateFlow(TranscriptUiState())
-    val transcriptState: StateFlow<TranscriptUiState> = _transcriptState.asStateFlow()
-
     init {
         viewModelScope.launch {
             repository.observeAllDays().collect { days ->
@@ -63,10 +46,6 @@ class EpisodeListViewModel @Inject constructor(
 
         playbackController.connect()
         refreshFeed()
-        syncRemoteProgressToLocal()
-
-        // Start background polling for missing transcriptions (every 30 min)
-        transcriptionManager.startBackgroundPolling()
     }
 
     fun refreshFeed() {
@@ -103,17 +82,11 @@ class EpisodeListViewModel @Inject constructor(
     fun resetProgress(date: String) {
         viewModelScope.launch {
             repository.resetProgress(date)
-            progressSyncRepository.pushProgress(date, 0L, false)
         }
     }
 
-    /**
-     * Delete a day's episode — removes audio files and DB record.
-     * If this day is currently playing, stop playback first.
-     */
     fun deleteDay(date: String) {
         viewModelScope.launch {
-            // Stop playback if this day is playing
             if (playbackState.value.currentDayDate == date) {
                 playbackController.pause()
             }
@@ -183,65 +156,7 @@ class EpisodeListViewModel @Inject constructor(
         return repository.parseSegments(day.segmentsJson)
     }
 
-    // ── Transcription (Remote Fetch) ─────────────────────
-
-    /**
-     * Observe transcripts for a day and automatically fetch any available from Firebase.
-     */
-    fun observeTranscriptsForDay(date: String, segmentCount: Int) {
-        viewModelScope.launch {
-            transcriptionManager.resetStuckTranscripts(date)
-
-            // Start observing local DB changes
-            launch {
-                transcriptionManager.observeTranscripts(date).collect { transcripts ->
-                    _transcriptState.value = TranscriptUiState(
-                        transcripts = transcripts,
-                        isFetching = _transcriptState.value.isFetching
-                    )
-                }
-            }
-
-            // Automatically try to fetch transcripts from Firebase
-            fetchTranscriptsForDay(date, segmentCount)
-        }
-    }
-
-    /**
-     * Fetch all available transcriptions for a day from Firebase.
-     */
-    fun fetchTranscriptsForDay(date: String, segmentCount: Int) {
-        viewModelScope.launch {
-            _transcriptState.value = _transcriptState.value.copy(isFetching = true)
-            try {
-                transcriptionManager.fetchTranscriptsForDay(date, segmentCount)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch transcripts for $date", e)
-            }
-            _transcriptState.value = _transcriptState.value.copy(isFetching = false)
-        }
-    }
-
-    /**
-     * Retry fetching a single segment's transcription from Firebase.
-     */
-    fun retryFetchSegment(date: String, segmentIndex: Int) {
-        viewModelScope.launch {
-            _transcriptState.value = _transcriptState.value.copy(isFetching = true)
-            try {
-                transcriptionManager.fetchSegmentTranscript(date, segmentIndex)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch transcript for $date seg$segmentIndex", e)
-            }
-            _transcriptState.value = _transcriptState.value.copy(isFetching = false)
-        }
-    }
-
-    fun parseTimedWords(wordsJson: String): List<TimedWord> {
-        return transcriptionManager.parseWords(wordsJson)
-    }
-
-    // ── Progress persistence ─────────────────────────────
+    // ── Progress persistence (local only) ───────────────
 
     fun saveListenProgress() {
         val state = playbackState.value
@@ -252,44 +167,16 @@ class EpisodeListViewModel @Inject constructor(
 
         viewModelScope.launch {
             repository.updateListenProgress(date, state.currentPositionMs, isListened)
-            progressSyncRepository.pushProgress(date, state.currentPositionMs, isListened)
-        }
-    }
-
-    private fun syncRemoteProgressToLocal() {
-        if (firebaseAuth.currentUser == null) return
-
-        viewModelScope.launch {
-            try {
-                val remoteProgress = progressSyncRepository.pullAllProgress()
-                if (remoteProgress.isEmpty()) return@launch
-
-                for ((date, remote) in remoteProgress) {
-                    val localDay = repository.getDayByDate(date) ?: continue
-                    if (remote.lastUpdated > localDay.lastUpdated) {
-                        Log.d(TAG, "Applying remote progress for $date: ${remote.listenedPositionMs}ms")
-                        repository.updateListenProgress(date, remote.listenedPositionMs, remote.isListened)
-                    } else {
-                        if (localDay.listenedPositionMs > 0) {
-                            progressSyncRepository.pushProgress(date, localDay.listenedPositionMs, localDay.isListened)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to sync remote progress", e)
-            }
         }
     }
 
     fun checkForNewSegments(date: String) {
         viewModelScope.launch {
-            // Snapshot segment count before refresh so we know what's new
             val dayBefore = repository.getDayByDate(date) ?: return@launch
             val previousSegmentCount = repository.parseSegments(dayBefore.segmentsJson).size
 
             val result = repository.appendNewSegments(date)
 
-            // If this day is currently loaded in the player, append new segments to the live playlist
             if (result.isSuccess && playbackState.value.currentDayDate == date) {
                 val updatedDay = repository.getDayByDate(date) ?: return@launch
                 val updatedSegments = repository.parseSegments(updatedDay.segmentsJson)
@@ -321,7 +208,6 @@ class EpisodeListViewModel @Inject constructor(
     override fun onCleared() {
         saveListenProgress()
         playbackController.disconnect()
-        transcriptionManager.stopBackgroundPolling()
         super.onCleared()
     }
 }

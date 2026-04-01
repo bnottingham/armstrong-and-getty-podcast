@@ -51,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,14 +75,11 @@ fun PlayerScreen(
     onBack: () -> Unit
 ) {
     val playbackState by viewModel.playbackState.collectAsState()
-    val transcriptState by viewModel.transcriptState.collectAsState()
     val segments = remember(day.segmentsJson) { viewModel.getSegmentsForDay(day) }
-    var selectedTab by rememberSaveable { mutableStateOf(0) } // 0=Segments, 1=Transcript
 
     // Load playlist if not already loaded for this day (does NOT auto-play)
     LaunchedEffect(day.date) {
         viewModel.loadDay(day)
-        viewModel.observeTranscriptsForDay(day.date, segments.size)
     }
 
     // Periodically save listen progress
@@ -234,96 +230,45 @@ fun PlayerScreen(
                 )
             }
 
-            // Tab switcher: Segments | Transcript
+            // Segments header
             item {
                 Spacer(modifier = Modifier.height(24.dp))
-                PlayerTabRow(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it },
-                    modifier = Modifier.padding(horizontal = 24.dp)
+                Text(
+                    text = "SEGMENTS",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = TextSecondary
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            when (selectedTab) {
-                0 -> {
-                    // Segments tab
-                    itemsIndexed(segments, key = { index, seg -> "${day.date}_$index" }) { index, segment ->
-                        var expanded by rememberSaveable(key = "${day.date}_seg_$index") {
-                            mutableStateOf(false)
-                        }
+            // Segments list
+            itemsIndexed(segments, key = { index, seg -> "${day.date}_$index" }) { index, segment ->
+                var expanded by rememberSaveable(key = "${day.date}_seg_$index") {
+                    mutableStateOf(false)
+                }
 
-                        SegmentRow(
-                            segment = segment,
-                            isActive = index == currentSegmentIndex,
-                            expanded = expanded,
-                            onToggleExpand = { expanded = !expanded },
-                            onPlay = {
-                                viewModel.seekToSegment(index)
-                                if (!playbackState.isPlaying) {
-                                    viewModel.togglePlayPause()
-                                }
-                            }
-                        )
+                SegmentRow(
+                    segment = segment,
+                    isActive = index == currentSegmentIndex,
+                    expanded = expanded,
+                    onToggleExpand = { expanded = !expanded },
+                    onPlay = {
+                        viewModel.seekToSegment(index)
+                        if (!playbackState.isPlaying) {
+                            viewModel.togglePlayPause()
+                        }
                     }
-                }
-                1 -> {
-                    // Transcript tab
-                    item {
-                        TranscriptView(
-                            transcripts = transcriptState.transcripts,
-                            segments = segments,
-                            currentSegmentIndex = currentSegmentIndex,
-                            isFetching = transcriptState.isFetching,
-                            onRetryFetchSegment = { segmentIndex ->
-                                viewModel.retryFetchSegment(day.date, segmentIndex)
-                            }
-                        )
-                    }
-                }
+                )
             }
 
             item { Spacer(modifier = Modifier.height(40.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun PlayerTabRow(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val tabs = listOf("Segments", "Transcript")
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        tabs.forEachIndexed { index, title ->
-            val isSelected = selectedTab == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) Gold.copy(alpha = 0.15f) else Color.Transparent)
-                    .clickable { onTabSelected(index) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = title.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (isSelected) Gold else TextSecondary,
-                        letterSpacing = 1.sp
-                    )
-                )
-            }
         }
     }
 }

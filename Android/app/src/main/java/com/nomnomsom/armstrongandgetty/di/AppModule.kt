@@ -6,7 +6,6 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
-import com.nomnomsom.armstrongandgetty.data.local.TranscriptDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -54,8 +53,4 @@ object AppModule {
     @Provides
     @Singleton
     fun providePodcastDayDao(db: PodcastDatabase): PodcastDayDao = db.podcastDayDao()
-
-    @Provides
-    @Singleton
-    fun provideTranscriptDao(db: PodcastDatabase): TranscriptDao = db.transcriptDao()
 }

@@ -1,7 +1,5 @@
 package com.nomnomsom.armstrongandgetty.ui.screens.episodelist
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +24,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay30
@@ -39,8 +34,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,16 +54,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
-import com.nomnomsom.armstrongandgetty.ui.screens.auth.AuthViewModel
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
 import com.nomnomsom.armstrongandgetty.ui.theme.LiveRed
@@ -86,22 +76,10 @@ import java.util.Locale
 @Composable
 fun EpisodeListScreen(
     viewModel: EpisodeListViewModel,
-    authViewModel: AuthViewModel,
     onEpisodeClick: (PodcastDay) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
-    val authState by authViewModel.uiState.collectAsState()
-
-    val isAuthenticated = authState.user != null
-
-    val signInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.data != null) {
-            authViewModel.handleSignInResult(result.data)
-        }
-    }
 
     // Determine what to show in the Now Playing tile:
     // 1. Currently active playback (player is ready with a day loaded)
@@ -127,17 +105,7 @@ fun EpisodeListScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // Header
-        EpisodeListHeader(
-            isAuthenticated = isAuthenticated,
-            photoUrl = authState.user?.photoUrl?.toString(),
-            displayName = authState.user?.displayName,
-            onSignOut = { authViewModel.signOut() },
-            onSignIn = {
-                authViewModel.clearError()
-                val signInIntent = authViewModel.getSignInIntent()
-                signInLauncher.launch(signInIntent)
-            }
-        )
+        EpisodeListHeader()
 
         // Pull to refresh wraps everything
         PullToRefreshBox(
@@ -245,15 +213,7 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun EpisodeListHeader(
-    isAuthenticated: Boolean,
-    photoUrl: String?,
-    displayName: String?,
-    onSignOut: () -> Unit,
-    onSignIn: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-
+private fun EpisodeListHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -287,79 +247,6 @@ private fun EpisodeListHeader(
                 text = "PODCAST · ON DEMAND",
                 style = MaterialTheme.typography.labelSmall
             )
-        }
-
-        if (isAuthenticated) {
-            Box {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { showMenu = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (photoUrl != null) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = "Profile",
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = "Profile",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    if (displayName != null) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    displayName,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                            },
-                            onClick = { },
-                            enabled = false
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("Sign Out") },
-                        onClick = {
-                            showMenu = false
-                            onSignOut()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                        }
-                    )
-                }
-            }
-        } else {
-            OutlinedButton(
-                onClick = onSignIn,
-                modifier = Modifier.height(36.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-            ) {
-                Icon(Icons.Filled.Login, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Sign in", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
         }
     }
 }
