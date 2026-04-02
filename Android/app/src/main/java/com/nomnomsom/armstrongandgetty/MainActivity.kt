@@ -6,18 +6,24 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,9 +31,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.mediarouter.app.MediaRouteButton
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -35,6 +44,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.google.android.gms.cast.framework.CastButtonFactory
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
@@ -67,6 +77,7 @@ private sealed class BottomTab(val route: String, val label: String, val icon: I
 
 private val bottomTabs = listOf(BottomTab.Podcast, BottomTab.XFeed)
 
+@kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AGPodcastNavigation() {
     val navController = rememberNavController()
@@ -90,9 +101,54 @@ fun AGPodcastNavigation() {
 
     // Only show bottom bar on the top-level tab screens
     val showBottomBar = currentRoute in bottomTabs.map { it.route }
+    val isPlayerRoute = currentRoute?.startsWith("player/") == true
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    if (isPlayerRoute) {
+                        Text(
+                            "NOW PLAYING",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    } else {
+                        Text(
+                            "A&G",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Gold
+                        )
+                    }
+                },
+                navigationIcon = {
+                    if (isPlayerRoute) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Gold
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    AndroidView(
+                        factory = { context ->
+                            MediaRouteButton(context).apply {
+                                setBackgroundColor(0xFF0E0F13.toInt())
+                                CastButtonFactory.setUpMediaRouteButton(context, this)
+                            }
+                        },
+                        modifier = Modifier.size(48.dp)
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
@@ -193,8 +249,7 @@ fun AGPodcastNavigation() {
                 if (day != null) {
                     PlayerScreen(
                         day = day,
-                        viewModel = episodeListViewModel,
-                        onBack = { navController.popBackStack() }
+                        viewModel = episodeListViewModel
                     )
                 }
             }

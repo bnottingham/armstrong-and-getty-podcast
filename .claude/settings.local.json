@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(find /Users/brett/Documents/projects/github/armstrong-and-getty-podcast -maxdepth 3 -name package.json -o -name *.html -o -name index.* -o -name main.*)",
+      "Bash(./gradlew compileDebugKotlin)"
     ]
   }
 }

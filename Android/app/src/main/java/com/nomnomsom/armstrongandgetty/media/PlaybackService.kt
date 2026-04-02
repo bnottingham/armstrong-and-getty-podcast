@@ -16,6 +16,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -83,6 +84,11 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(pendingIntent)
             .build()
 
+        // Set up notification so the service stays alive when backgrounded
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build()
+        )
+
         // Automatically switch between ExoPlayer and CastPlayer
         castPlayer?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
             override fun onCastSessionAvailable() {
@@ -140,6 +146,15 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         return mediaSession
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = mediaSession?.player
+        if (player != null && (player.playWhenReady || player is CastPlayer)) {
+            // Keep the service alive for active playback or active Cast session
+        } else {
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {

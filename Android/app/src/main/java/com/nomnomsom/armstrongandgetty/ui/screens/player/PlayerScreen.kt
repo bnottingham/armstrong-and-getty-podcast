@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Forward10
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,8 +34,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,9 +52,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.mediarouter.app.MediaRouteButton
-import com.google.android.gms.cast.framework.CastButtonFactory
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
@@ -70,12 +63,10 @@ import com.nomnomsom.armstrongandgetty.ui.theme.TextSecondary
 import com.nomnomsom.armstrongandgetty.util.formatDuration
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     day: PodcastDay,
-    viewModel: EpisodeListViewModel,
-    onBack: () -> Unit
+    viewModel: EpisodeListViewModel
 ) {
     val playbackState by viewModel.playbackState.collectAsState()
     val segments = remember(day.segmentsJson) { viewModel.getSegmentsForDay(day) }
@@ -111,52 +102,12 @@ fun PlayerScreen(
     // Current segment index comes directly from the player (which media item is active)
     val currentSegmentIndex = playbackState.currentSegmentIndex.coerceIn(0, (segments.size - 1).coerceAtLeast(0))
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top bar
-        TopAppBar(
-            title = {
-                Text(
-                    "NOW PLAYING",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Gold
-                    )
-                }
-            },
-            actions = {
-                AndroidView(
-                    factory = { context ->
-                        MediaRouteButton(context).apply {
-                            // Fix for "background can not be translucent: #0" crash.
-                            // Ensure the button has a solid background for contrast calculations.
-                            setBackgroundColor(0xFF0E0F13.toInt()) // Matches DarkBg
-                            CastButtonFactory.setUpMediaRouteButton(context, this)
-                        }
-                    },
-                    modifier = Modifier.size(48.dp)
-                )
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
-            )
-        )
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
             // Album art
             item {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -285,7 +236,6 @@ fun PlayerScreen(
 
             item { Spacer(modifier = Modifier.height(40.dp)) }
         }
-    }
 }
 
 @Composable
