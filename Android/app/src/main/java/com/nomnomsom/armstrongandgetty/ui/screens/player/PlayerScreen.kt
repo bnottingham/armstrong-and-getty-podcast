@@ -56,6 +56,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.framework.CastButtonFactory
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
@@ -132,7 +135,19 @@ fun PlayerScreen(
                     )
                 }
             },
-            actions = { Spacer(modifier = Modifier.width(48.dp)) },
+            actions = {
+                AndroidView(
+                    factory = { context ->
+                        MediaRouteButton(context).apply {
+                            // Fix for "background can not be translucent: #0" crash.
+                            // Ensure the button has a solid background for contrast calculations.
+                            setBackgroundColor(0xFF0E0F13.toInt()) // Matches DarkBg
+                            CastButtonFactory.setUpMediaRouteButton(context, this)
+                        }
+                    },
+                    modifier = Modifier.size(48.dp)
+                )
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             )

@@ -122,6 +122,7 @@ class EpisodeListViewModel @Inject constructor(
         val segTitles = segments.map { seg ->
             if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
         }
+        val remoteUrls = segments.map { it.audioUrl }
         val actualDurations = segments.map { seg ->
             if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
         }
@@ -131,6 +132,7 @@ class EpisodeListViewModel @Inject constructor(
             title = day.title,
             segmentFilePaths = filePaths,
             segmentTitles = segTitles,
+            remoteUrls = remoteUrls,
             actualDurations = actualDurations,
             startPositionMs = if (day.isListened) 0L else day.listenedPositionMs,
             autoPlay = false
@@ -145,6 +147,7 @@ class EpisodeListViewModel @Inject constructor(
         val segTitles = segments.map { seg ->
             if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
         }
+        val remoteUrls = segments.map { it.audioUrl }
         val actualDurations = segments.map { seg ->
             if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
         }
@@ -154,6 +157,7 @@ class EpisodeListViewModel @Inject constructor(
             title = day.title,
             segmentFilePaths = filePaths,
             segmentTitles = segTitles,
+            remoteUrls = remoteUrls,
             actualDurations = actualDurations,
             startPositionMs = if (day.isListened) 0L else day.listenedPositionMs
         )
@@ -207,6 +211,7 @@ class EpisodeListViewModel @Inject constructor(
                     val newTitles = newSegments.map { seg ->
                         if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
                     }
+                    val newRemoteUrls = newSegments.map { it.audioUrl }
                     val newDurations = newSegments.map { seg ->
                         if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
                     }
@@ -215,6 +220,7 @@ class EpisodeListViewModel @Inject constructor(
                         dayTitle = updatedDay.title,
                         newSegmentFilePaths = newFilePaths,
                         newSegmentTitles = newTitles,
+                        newRemoteUrls = newRemoteUrls,
                         newActualDurations = newDurations
                     )
 

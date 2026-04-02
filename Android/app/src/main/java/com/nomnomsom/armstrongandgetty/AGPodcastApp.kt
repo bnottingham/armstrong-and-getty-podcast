@@ -8,7 +8,9 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.google.android.gms.cast.framework.CastContext
 import com.nomnomsom.armstrongandgetty.work.NewEpisodeCheckWorker
+import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -26,6 +28,10 @@ class AGPodcastApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        
+        // Initialize CastContext early to avoid UI-thread blocking during first use
+        CastContext.getSharedInstance(this)
+
         scheduleNewEpisodeCheck()
     }
 

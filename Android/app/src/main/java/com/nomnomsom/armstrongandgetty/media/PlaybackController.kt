@@ -3,8 +3,10 @@ package com.nomnomsom.armstrongandgetty.media
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -84,6 +86,7 @@ class PlaybackController @Inject constructor(
      * @param title The display title
      * @param segmentFilePaths List of file paths, one per segment
      * @param segmentTitles List of titles for each segment
+     * @param remoteUrls Original remote URLs (required for casting)
      * @param actualDurations Measured durations for each segment in ms
      * @param startPositionMs Virtual start position across all segments
      */
@@ -92,6 +95,7 @@ class PlaybackController @Inject constructor(
         title: String,
         segmentFilePaths: List<String>,
         segmentTitles: List<String>,
+        remoteUrls: List<String>,
         actualDurations: List<Long>,
         startPositionMs: Long = 0L,
         autoPlay: Boolean = true
@@ -112,14 +116,22 @@ class PlaybackController @Inject constructor(
         // Build media items for each segment
         val mediaItems = segmentFilePaths.mapIndexed { index, path ->
             val segTitle = segmentTitles.getOrElse(index) { "Segment ${index + 1}" }
+            val remoteUrl = remoteUrls.getOrElse(index) { "" }
+            
+            val extras = Bundle().apply {
+                putString("remote_url", remoteUrl)
+            }
+
             MediaItem.Builder()
                 .setUri(Uri.parse("file://$path"))
+                .setMimeType(MimeTypes.AUDIO_MPEG)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle("$title — $segTitle")
                         .setArtist("Armstrong & Getty")
                         .setAlbumTitle("Armstrong & Getty On Demand")
                         .setTrackNumber(index + 1)
+                        .setExtras(extras)
                         .build()
                 )
                 .build()
@@ -149,6 +161,7 @@ class PlaybackController @Inject constructor(
         dayTitle: String,
         newSegmentFilePaths: List<String>,
         newSegmentTitles: List<String>,
+        newRemoteUrls: List<String>,
         newActualDurations: List<Long>
     ) {
         val ctrl = controller ?: return
@@ -167,14 +180,22 @@ class PlaybackController @Inject constructor(
         val existingCount = ctrl.mediaItemCount
         val mediaItems = newSegmentFilePaths.mapIndexed { i, path ->
             val segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" }
+            val remoteUrl = newRemoteUrls.getOrElse(i) { "" }
+
+            val extras = Bundle().apply {
+                putString("remote_url", remoteUrl)
+            }
+
             MediaItem.Builder()
                 .setUri(Uri.parse("file://$path"))
+                .setMimeType(MimeTypes.AUDIO_MPEG)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle("$dayTitle — $segTitle")
                         .setArtist("Armstrong & Getty")
                         .setAlbumTitle("Armstrong & Getty On Demand")
                         .setTrackNumber(existingCount + i + 1)
+                        .setExtras(extras)
                         .build()
                 )
                 .build()
