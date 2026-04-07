@@ -70,7 +70,15 @@ class EpisodeListViewModel @Inject constructor(
                 if (latestDay != null) {
                     when {
                         latestDay.downloadState == DownloadState.NONE.value -> downloadDay(latestDate)
-                        latestDay.downloadState == DownloadState.DOWNLOADED.value && !latestDay.isComplete -> checkForNewSegments(latestDate)
+                        latestDay.downloadState == DownloadState.DOWNLOADED.value -> {
+                            val segments = repository.parseSegments(latestDay.segmentsJson)
+                            when {
+                                // Day still in progress — check for new segments (e.g. live show)
+                                !latestDay.isComplete -> checkForNewSegments(latestDate)
+                                // Day complete but not all files on disk (e.g. OMT added after initial download)
+                                !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> downloadDay(latestDate)
+                            }
+                        }
                         latestDay.downloadState == DownloadState.ERROR.value -> downloadDay(latestDate)
                     }
                 }
@@ -118,12 +126,18 @@ class EpisodeListViewModel @Inject constructor(
         if (playbackState.value.currentDayDate == day.date) return
 
         val segments = repository.parseSegments(day.segmentsJson)
-        val filePaths = repository.getSegmentFilePaths(day.date, segments.size)
-        val segTitles = segments.map { seg ->
+        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
+
+        // Only include segments whose files exist on disk (OMT may not be downloaded yet)
+        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
+        if (paired.isEmpty()) return
+        val (playableSegments, filePaths) = paired.unzip()
+
+        val segTitles = playableSegments.map { seg ->
             if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
         }
-        val remoteUrls = segments.map { it.audioUrl }
-        val actualDurations = segments.map { seg ->
+        val remoteUrls = playableSegments.map { it.audioUrl }
+        val actualDurations = playableSegments.map { seg ->
             if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
         }
 
@@ -143,12 +157,18 @@ class EpisodeListViewModel @Inject constructor(
         if (day.downloadState != DownloadState.DOWNLOADED.value) return
 
         val segments = repository.parseSegments(day.segmentsJson)
-        val filePaths = repository.getSegmentFilePaths(day.date, segments.size)
-        val segTitles = segments.map { seg ->
+        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
+
+        // Only include segments whose files exist on disk (OMT may not be downloaded yet)
+        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
+        if (paired.isEmpty()) return
+        val (playableSegments, filePaths) = paired.unzip()
+
+        val segTitles = playableSegments.map { seg ->
             if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
         }
-        val remoteUrls = segments.map { it.audioUrl }
-        val actualDurations = segments.map { seg ->
+        val remoteUrls = playableSegments.map { it.audioUrl }
+        val actualDurations = playableSegments.map { seg ->
             if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
         }
 

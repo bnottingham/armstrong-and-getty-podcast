@@ -152,19 +152,13 @@ class AudioDownloader @Inject constructor(
 
     /**
      * Count how many segments for a day actually exist on disk.
-     * Counts from index 0 up — stops at the first missing file.
+     * Counts all existing files regardless of gaps (e.g. seg0-3 present, seg4 missing, seg5 present → returns 5).
      */
     fun countExistingSegments(date: String, totalSegments: Int): Int {
-        var count = 0
-        for (index in 0 until totalSegments) {
+        return (0 until totalSegments).count { index ->
             val file = File(podcastDir, "ag_${date}_seg${index}.mp3")
-            if (file.exists() && file.length() > 0) {
-                count++
-            } else {
-                break
-            }
+            file.exists() && file.length() > 0
         }
-        return count
     }
 
     /**

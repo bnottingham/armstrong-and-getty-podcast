@@ -211,6 +211,10 @@ class PodcastRepository @Inject constructor(
         return audioDownloader.getSegmentFiles(date, segmentCount)
     }
 
+    fun hasAllSegmentsOnDisk(date: String, segmentCount: Int): Boolean {
+        return audioDownloader.hasAllSegments(date, segmentCount)
+    }
+
     suspend fun updateListenProgress(date: String, positionMs: Long, isListened: Boolean) {
         dao.updateListenProgress(date, positionMs, isListened)
     }
