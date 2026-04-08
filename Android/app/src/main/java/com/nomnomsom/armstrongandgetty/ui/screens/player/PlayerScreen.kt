@@ -76,10 +76,15 @@ fun PlayerScreen(
         viewModel.loadDay(day)
     }
 
-    // Periodically save listen progress
+    // Periodically save listen progress while playing; save immediately on pause
     LaunchedEffect(playbackState.isPlaying) {
-        while (playbackState.isPlaying) {
-            delay(5_000)
+        if (playbackState.isPlaying) {
+            while (true) {
+                delay(5_000)
+                viewModel.saveListenProgress()
+            }
+        } else {
+            // Playback just stopped (pause, audio focus loss, etc.) — save immediately
             viewModel.saveListenProgress()
         }
     }

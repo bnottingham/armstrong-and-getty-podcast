@@ -10,10 +10,12 @@ import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class EpisodeListUiState(
@@ -148,7 +150,7 @@ class EpisodeListViewModel @Inject constructor(
             segmentTitles = segTitles,
             remoteUrls = remoteUrls,
             actualDurations = actualDurations,
-            startPositionMs = if (day.isListened) 0L else day.listenedPositionMs,
+            startPositionMs = day.listenedPositionMs,
             autoPlay = false
         )
     }
@@ -205,11 +207,17 @@ class EpisodeListViewModel @Inject constructor(
         val state = playbackState.value
         val date = state.currentDayDate ?: return
         if (state.durationMs <= 0) return
+        // Don't overwrite real progress with 0 during player state transitions
+        if (state.currentPositionMs <= 0) return
 
         val isListened = state.currentPositionMs >= state.durationMs - 5000
 
+        // Use NonCancellable so the DB write completes even during scope cancellation
+        // (e.g. when onCleared() fires and viewModelScope is about to be cancelled)
         viewModelScope.launch {
-            repository.updateListenProgress(date, state.currentPositionMs, isListened)
+            withContext(NonCancellable) {
+                repository.updateListenProgress(date, state.currentPositionMs, isListened)
+            }
         }
     }
 
