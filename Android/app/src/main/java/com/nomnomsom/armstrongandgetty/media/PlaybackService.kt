@@ -60,12 +60,11 @@ class PlaybackService : MediaLibraryService() {
 
         exoPlayer = player
 
-        // Initialize CastPlayer
+        // CastContext fails on devices without Google Play Services — fall back to ExoPlayer only.
         try {
             val castContext = CastContext.getSharedInstance(this)
             castPlayer = CastPlayer(castContext)
-        } catch (e: Exception) {
-            // Cast context might fail if Play Services are missing or not initialized
+        } catch (_: Exception) {
         }
 
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
@@ -84,12 +83,10 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(pendingIntent)
             .build()
 
-        // Set up notification so the service stays alive when backgrounded
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this).build()
         )
 
-        // Automatically switch between ExoPlayer and CastPlayer
         castPlayer?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
             override fun onCastSessionAvailable() {
                 switchToPlayer(castPlayer!!)
@@ -107,15 +104,13 @@ class PlaybackService : MediaLibraryService() {
         val oldPlayer = session.player
         if (oldPlayer === newPlayer) return
 
-        // Transfer state to new player
+        // CastPlayer can't stream file:// URIs, so swap in the original remote URL
+        // we stashed in the MediaItem's extras when handing off to CastPlayer.
         val mediaItems = mutableListOf<MediaItem>()
         for (i in 0 until oldPlayer.mediaItemCount) {
             val oldItem = oldPlayer.getMediaItemAt(i)
-            // Ensure URI is usable by Cast (no file:// URIs)
             val uri = oldItem.localConfiguration?.uri
             val finalUri = if (uri?.scheme == "file") {
-                // If it's a local file, we need the original remote URL for casting
-                // We'll rely on the mediaId or metadata if we stored it there
                 oldItem.mediaMetadata.extras?.getString("remote_url")?.let { Uri.parse(it) } ?: uri
             } else {
                 uri
@@ -133,7 +128,6 @@ class PlaybackService : MediaLibraryService() {
         val currentPositionMs = oldPlayer.currentPosition
         val playWhenReady = oldPlayer.playWhenReady
 
-        // Stop and clear old player AFTER grabbing items
         oldPlayer.stop()
         oldPlayer.clearMediaItems()
 
@@ -149,10 +143,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // Keep alive during active playback or an active Cast session; otherwise stop.
         val player = mediaSession?.player
-        if (player != null && (player.playWhenReady || player is CastPlayer)) {
-            // Keep the service alive for active playback or active Cast session
-        } else {
+        if (player == null || (!player.playWhenReady && player !is CastPlayer)) {
             stopSelf()
         }
     }

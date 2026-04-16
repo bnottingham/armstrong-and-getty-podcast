@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
@@ -19,12 +18,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
 /**
- * Periodic background worker that:
- * 1. Checks the RSS feed for new episodes/segments every 10 minutes
- * 2. Shows a notification when new content is found
- * 3. Automatically downloads new segments in the background
- *
- * No auth required — available to all users.
+ * Periodic worker: refresh the RSS feed, notify on new episodes/segments, and
+ * auto-download any new content.
  */
 @HiltWorker
 class NewEpisodeCheckWorker @AssistedInject constructor(
@@ -44,15 +39,13 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
         Log.d(TAG, "Checking for new episodes…")
 
         try {
-            // Snapshot which days we know about and their segment counts before refresh
+            // Snapshot segment counts before refresh so we can diff afterward.
             val daysBefore = mutableMapOf<String, Int>()
-            // We can only get current state via the repo — pull all known days
             val knownDays = repository.getAllDaysSnapshot()
             for (day in knownDays) {
                 daysBefore[day.date] = day.segmentCount
             }
 
-            // Refresh the RSS feed — this updates the DB with any new days/segments
             val refreshResult = repository.refreshFeed()
             if (refreshResult.isFailure) {
                 Log.w(TAG, "Feed refresh failed: ${refreshResult.exceptionOrNull()?.message}")
@@ -62,7 +55,6 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
             val latestDate = refreshResult.getOrThrow()
             if (latestDate.isBlank()) return Result.success()
 
-            // Check what changed
             val daysAfter = repository.getAllDaysSnapshot()
             var newEpisodeFound = false
             var newSegmentsFound = false
@@ -73,12 +65,10 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
                 val previousCount = daysBefore[day.date]
 
                 if (previousCount == null) {
-                    // Entirely new day
                     newEpisodeFound = true
                     newDayDate = day.date
                     totalNewSegments += day.segmentCount
                 } else if (day.segmentCount > previousCount) {
-                    // Existing day got new segments
                     newSegmentsFound = true
                     newDayDate = day.date
                     totalNewSegments += (day.segmentCount - previousCount)
@@ -92,7 +82,6 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
 
             Log.d(TAG, "New content found! newEpisode=$newEpisodeFound newSegments=$newSegmentsFound count=$totalNewSegments")
 
-            // Show notification
             val notificationTitle = if (newEpisodeFound) {
                 "New A&G Episode Available"
             } else {
@@ -106,18 +95,15 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
 
             showNotification(notificationTitle, notificationBody)
 
-            // Auto-download new/updated days
             for (day in daysAfter) {
                 val previousCount = daysBefore[day.date]
                 val isNew = previousCount == null
                 val hasNewSegments = previousCount != null && day.segmentCount > previousCount
 
                 if (isNew) {
-                    // New day — download everything
                     Log.d(TAG, "Auto-downloading new episode: ${day.date}")
                     repository.downloadDay(day.date)
                 } else if (hasNewSegments && day.downloadState == DownloadState.DOWNLOADED.value) {
-                    // Existing downloaded day got more segments — append them
                     Log.d(TAG, "Auto-downloading new segments for: ${day.date}")
                     repository.appendNewSegments(day.date)
                 }
@@ -133,19 +119,15 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
     private fun showNotification(title: String, body: String) {
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Create channel (required for API 26+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "New Episodes",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Notifications when new Armstrong & Getty episodes are available"
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "New Episodes",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Notifications when new Armstrong & Getty episodes are available"
         }
+        notificationManager.createNotificationChannel(channel)
 
-        // Tap notification → open app
         val intent = Intent(applicationContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }

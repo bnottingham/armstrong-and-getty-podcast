@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import kotlinx.coroutines.flow.Flow
 
@@ -17,9 +16,6 @@ interface PodcastDayDao {
     @Query("SELECT * FROM podcast_days ORDER BY date DESC")
     suspend fun getAllDaysSnapshot(): List<PodcastDay>
 
-    @Query("SELECT * FROM podcast_days WHERE downloadState = 'downloaded' ORDER BY date DESC")
-    suspend fun getAllDownloadedDays(): List<PodcastDay>
-
     @Query("SELECT * FROM podcast_days WHERE date = :date")
     suspend fun getDayByDate(date: String): PodcastDay?
 
@@ -28,12 +24,6 @@ interface PodcastDayDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplace(day: PodcastDay)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertIfNotExists(day: PodcastDay)
-
-    @Update
-    suspend fun update(day: PodcastDay)
 
     @Query("UPDATE podcast_days SET downloadState = :state WHERE date = :date")
     suspend fun updateDownloadState(date: String, state: String)
@@ -69,7 +59,4 @@ interface PodcastDayDao {
 
     @Query("DELETE FROM podcast_days WHERE date = :date")
     suspend fun deleteDay(date: String)
-
-    @Query("SELECT * FROM podcast_days ORDER BY date DESC LIMIT 1")
-    suspend fun getLatestDay(): PodcastDay?
 }

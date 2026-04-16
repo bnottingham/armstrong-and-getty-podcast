@@ -1,8 +1,6 @@
 package com.nomnomsom.armstrongandgetty.util
 
-/**
- * Format milliseconds to display string like "1:23:45" or "23:45"
- */
+/** Milliseconds → "1:23:45" or "23:45". */
 fun Long.formatDuration(): String {
     val totalSeconds = (this / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
@@ -15,9 +13,7 @@ fun Long.formatDuration(): String {
     }
 }
 
-/**
- * Format milliseconds to a short display like "2h 22m"
- */
+/** Milliseconds → "2h 22m" or "45m". */
 fun Long.formatShortDuration(): String {
     val totalMinutes = (this / 60_000).coerceAtLeast(0)
     val hours = totalMinutes / 60

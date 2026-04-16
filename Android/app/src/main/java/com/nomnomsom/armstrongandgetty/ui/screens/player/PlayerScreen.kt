@@ -71,12 +71,11 @@ fun PlayerScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val segments = remember(day.segmentsJson) { viewModel.getSegmentsForDay(day) }
 
-    // Load playlist if not already loaded for this day (does NOT auto-play)
+    // Load the playlist without auto-playing, so the user can resume manually.
     LaunchedEffect(day.date) {
         viewModel.loadDay(day)
     }
 
-    // Periodically save listen progress while playing; save immediately on pause
     LaunchedEffect(playbackState.isPlaying) {
         if (playbackState.isPlaying) {
             while (true) {
@@ -84,27 +83,23 @@ fun PlayerScreen(
                 viewModel.saveListenProgress()
             }
         } else {
-            // Playback just stopped (pause, audio focus loss, etc.) — save immediately
             viewModel.saveListenProgress()
         }
     }
 
-    // Save progress on leaving
     DisposableEffect(Unit) {
         onDispose { viewModel.saveListenProgress() }
     }
 
-    // Check for new segments if day is incomplete
     LaunchedEffect(day.isComplete) {
         if (!day.isComplete) {
             while (true) {
-                delay(120_000) // Check every 2 min
+                delay(120_000)
                 viewModel.checkForNewSegments(day.date)
             }
         }
     }
 
-    // Current segment index comes directly from the player (which media item is active)
     val currentSegmentIndex = playbackState.currentSegmentIndex.coerceIn(0, (segments.size - 1).coerceAtLeast(0))
 
     LazyColumn(
@@ -113,7 +108,6 @@ fun PlayerScreen(
             .background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-            // Album art
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Box(
@@ -141,7 +135,6 @@ fun PlayerScreen(
                 }
             }
 
-            // Live indicator
             if (!day.isComplete) {
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -154,7 +147,6 @@ fun PlayerScreen(
                 }
             }
 
-            // Title & current segment
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
@@ -178,7 +170,6 @@ fun PlayerScreen(
                 }
             }
 
-            // Seek bar
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 SeekBar(
@@ -189,7 +180,6 @@ fun PlayerScreen(
                 )
             }
 
-            // Transport controls
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 TransportControls(
@@ -201,7 +191,6 @@ fun PlayerScreen(
                 )
             }
 
-            // Segments header
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
@@ -219,7 +208,6 @@ fun PlayerScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Segments list
             itemsIndexed(segments, key = { index, seg -> "${day.date}_$index" }) { index, segment ->
                 var expanded by rememberSaveable(key = "${day.date}_seg_$index") {
                     mutableStateOf(false)
@@ -305,7 +293,6 @@ private fun TransportControls(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 30.dp)
         ) {
-            // -30s
             IconButton(
                 onClick = { onSkip(-30_000) },
                 modifier = Modifier
@@ -316,7 +303,6 @@ private fun TransportControls(
                 Icon(Icons.Filled.Replay30, "Rewind 30s", tint = Gold, modifier = Modifier.size(24.dp))
             }
 
-            // -10s
             IconButton(
                 onClick = { onSkip(-10_000) },
                 modifier = Modifier
@@ -327,7 +313,6 @@ private fun TransportControls(
                 Icon(Icons.Filled.Replay10, "Rewind 10s", tint = Gold, modifier = Modifier.size(24.dp))
             }
 
-            // Play/Pause
             IconButton(
                 onClick = onTogglePlay,
                 modifier = Modifier
@@ -343,7 +328,6 @@ private fun TransportControls(
                 )
             }
 
-            // +10s
             IconButton(
                 onClick = { onSkip(10_000) },
                 modifier = Modifier
@@ -354,7 +338,6 @@ private fun TransportControls(
                 Icon(Icons.Filled.Forward10, "Forward 10s", tint = Gold, modifier = Modifier.size(24.dp))
             }
 
-            // +30s
             IconButton(
                 onClick = { onSkip(30_000) },
                 modifier = Modifier
@@ -368,7 +351,6 @@ private fun TransportControls(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Speed button
         TextButton(
             onClick = onCycleSpeed,
             shape = RoundedCornerShape(20.dp)
@@ -404,7 +386,6 @@ private fun SegmentRow(
                 .padding(start = 24.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Active indicator bar
             if (isActive) {
                 Box(
                     modifier = Modifier
@@ -415,14 +396,12 @@ private fun SegmentRow(
                 Spacer(modifier = Modifier.width(9.dp))
             }
 
-            // Hour label
             Text(
                 text = if (segment.hour == "OMT") "OMT" else "Hr ${segment.hour}",
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
                 modifier = Modifier.width(if (isActive) 28.dp else 37.dp)
             )
 
-            // Title — wraps to multiple lines
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -436,7 +415,6 @@ private fun SegmentRow(
                         fontSize = 13.sp
                     )
                 )
-                // Duration below title
                 val displayDurationMin = if (segment.actualDurationMs > 0) {
                     segment.actualDurationMs / 60_000
                 } else {
@@ -453,7 +431,6 @@ private fun SegmentRow(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Play button — always visible
             IconButton(
                 onClick = onPlay,
                 modifier = Modifier
@@ -471,7 +448,6 @@ private fun SegmentRow(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Expand/collapse button
             IconButton(
                 onClick = onToggleExpand,
                 modifier = Modifier.size(40.dp)
@@ -485,7 +461,6 @@ private fun SegmentRow(
             }
         }
 
-        // Expanded content: description
         if (expanded && segment.description.isNotBlank()) {
             Text(
                 text = segment.description,

@@ -11,19 +11,15 @@ import androidx.room.PrimaryKey
 data class PodcastDay(
     @PrimaryKey
     val date: String, // "2026-03-05" format — unique per day
-
-    val title: String, // "A&G — Mar 5, 2026"
-    val summary: String, // Combined description from all segments
-    val segmentsJson: String, // JSON array of Segment objects
-    val totalDurationMs: Long, // Combined duration of all segments in ms
-    val segmentCount: Int, // Number of segments (hours) in this day
-
-    val downloadState: String, // "none", "downloading", "downloaded", "error"
-    val combinedFilePath: String?, // Path to combined audio file on disk
-    val isComplete: Boolean, // Whether the show is done for the day (all hours posted)
-
-    val listenedPositionMs: Long, // Where the user left off
-    val isListened: Boolean, // Whether user finished the whole episode
-
-    val lastUpdated: Long // Timestamp for when we last checked/updated this day
+    val title: String,
+    val summary: String,
+    val segmentsJson: String,
+    val totalDurationMs: Long,
+    val segmentCount: Int,
+    val downloadState: String, // one of DownloadState.value
+    val combinedFilePath: String?,
+    val isComplete: Boolean, // false while the show is still live and more hours can still post
+    val listenedPositionMs: Long,
+    val isListened: Boolean,
+    val lastUpdated: Long
 )

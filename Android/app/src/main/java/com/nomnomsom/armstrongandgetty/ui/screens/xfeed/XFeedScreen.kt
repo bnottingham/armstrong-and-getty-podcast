@@ -106,13 +106,11 @@ fun XFeedScreen(
             }
 
             uiState.items.isNotEmpty() -> {
-                // Track whether the WebView is scrolled to the top so we can
-                // let PullToRefreshBox intercept the downward drag.
+                // Pull-to-refresh only intercepts the drag when the WebView is scrolled to the top.
                 var webViewAtTop by remember { mutableStateOf(true) }
 
-                // Passthrough nested scroll connection — we don't consume
-                // anything here, but wiring it enables the nested scroll chain
-                // so PullToRefreshBox can intercept when the WebView allows it.
+                // Empty NestedScrollConnection: doesn't consume anything but wires the
+                // WebView into Compose's nested-scroll chain so PullToRefreshBox can see drags.
                 val nestedScrollConnection = remember {
                     object : NestedScrollConnection {
                         override fun onPreScroll(
@@ -146,7 +144,6 @@ fun XFeedScreen(
                         }
                     }
 
-                    // "New posts" banner — slides in from the top when new posts arrive while viewing
                     androidx.compose.animation.AnimatedVisibility(
                         visible = newPostsWhileViewing > 0,
                         enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -235,18 +232,10 @@ private fun XFeedHeader() {
 }
 
 /**
- * Single WebView that loads a page containing one iframe per tweet.
- * Each iframe points to platform.twitter.com/embed/Tweet.html?id=XXX
- * which is Twitter's hosted embed page — it renders fully on its own.
- *
- * A postMessage listener catches resize events from each iframe and
- * adjusts the iframe height so every tweet displays fully without cutoff.
- * The whole page scrolls naturally inside the WebView.
- *
- * @param onScrollChanged reports the WebView's vertical scroll offset so
- *        the parent can enable pull-to-refresh only when scrolled to the top.
- * @param enableParentScroll when true, the WebView disables its overscroll
- *        and allows the parent (PullToRefreshBox) to intercept the downward drag.
+ * Hosts one iframe per tweet (platform.twitter.com's embed page) and listens for
+ * the embed's `twttr.private.resize` postMessage to size each iframe correctly.
+ * `enableParentScroll`/`onScrollChanged` let the parent PullToRefreshBox intercept
+ * the downward drag only when the WebView is already at the top.
  */
 @Composable
 private fun TweetFeedWebView(
@@ -317,7 +306,7 @@ private fun TweetFeedWebView(
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
 
-                        // Allow Twitter/X embed resources to load inside the WebView
+                        // Let Twitter/X embed resources load in-WebView; send everything else to the device browser.
                         if (url.contains("platform.twitter.com")) return false
                         if (url.contains("syndication.twitter.com")) return false
                         if (url.contains("cdn.syndication.twimg.com")) return false
@@ -326,7 +315,6 @@ private fun TweetFeedWebView(
                         if (url.contains("video.twimg.com")) return false
                         if (url.contains("ton.twimg.com")) return false
 
-                        // Everything else opens in the device browser
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                         ctx.startActivity(intent)
                         return true
@@ -335,7 +323,7 @@ private fun TweetFeedWebView(
 
                 webChromeClient = WebChromeClient()
 
-                // Load as a web page from Twitter's domain so iframes aren't blocked
+                // Base URL is on Twitter's own domain so the embed iframes aren't blocked as cross-origin.
                 loadDataWithBaseURL(
                     "https://platform.twitter.com",
                     html,
@@ -346,34 +334,19 @@ private fun TweetFeedWebView(
             }
         },
         update = { webView ->
-            // When the WebView is at the top, disable its own overscroll so the
-            // parent PullToRefreshBox can intercept the downward drag gesture.
+            // At the top of the page we disable overscroll and release the touch lock so
+            // the parent PullToRefreshBox owns the downward drag.
             webView.overScrollMode = if (enableParentScroll) {
                 WebView.OVER_SCROLL_NEVER
             } else {
                 WebView.OVER_SCROLL_IF_CONTENT_SCROLLS
             }
-            // Tell the parent ViewGroup it's OK to intercept touch events
-            // when the WebView is scrolled to the top (for pull-to-refresh).
             webView.parent?.requestDisallowInterceptTouchEvent(!enableParentScroll)
         },
         modifier = modifier
     )
 }
 
-/**
- * Builds an HTML page with one iframe per tweet.
- *
- * Each iframe loads Twitter's hosted embed page directly:
- *   https://platform.twitter.com/embed/Tweet.html?id=XXX&theme=dark&dnt=true
- *
- * This is a fully self-contained Twitter page that renders the tweet
- * with profile picture, text, images, videos, link cards, and action buttons.
- *
- * The JavaScript listens for postMessage events from the iframes
- * (Twitter's embed sends 'twttr.embed' resize messages) and adjusts
- * each iframe's height so the tweet displays fully.
- */
 private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
     val iframes = items.mapIndexed { index, item ->
         val embedUrl = "https://platform.twitter.com/embed/Tweet.html" +
@@ -417,7 +390,6 @@ private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
                 width: 100%;
                 border: none;
                 display: block;
-                /* Start with a reasonable default height */
                 height: 350px;
             }
         </style>
@@ -428,13 +400,12 @@ private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
         <div style="height: 80px;"></div>
         
         <script>
-            // Listen for resize messages from the Twitter embed iframes.
-            // Twitter's embed page sends postMessage events with sizing info.
+            // Twitter's embed posts 'twttr.embed' / 'twttr.private.resize' messages with
+            // the final rendered height; resize the matching iframe to avoid clipping.
             window.addEventListener('message', function(event) {
                 try {
                     var data = event.data;
-                    
-                    // Twitter embeds send messages in different formats
+
                     if (typeof data === 'object' && data['twttr.embed']) {
                         var embed = data['twttr.embed'];
                         if (embed.method === 'twttr.private.resize') {
@@ -442,7 +413,6 @@ private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
                             if (params && params.length > 0) {
                                 var height = params[0].height;
                                 if (height) {
-                                    // Find which iframe sent this message
                                     var frames = document.querySelectorAll('.tweet-frame');
                                     for (var i = 0; i < frames.length; i++) {
                                         if (frames[i].contentWindow === event.source) {
@@ -454,8 +424,7 @@ private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
                             }
                         }
                     }
-                    
-                    // Also handle string-format messages
+
                     if (typeof data === 'string') {
                         try {
                             var parsed = JSON.parse(data);

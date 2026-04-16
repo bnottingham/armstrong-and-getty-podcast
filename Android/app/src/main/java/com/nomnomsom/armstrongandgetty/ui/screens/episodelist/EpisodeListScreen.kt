@@ -82,10 +82,7 @@ fun EpisodeListScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val downloadProgressMap by viewModel.downloadProgress.collectAsState()
 
-    // Determine what to show in the Now Playing tile:
-    // 1. Currently active playback (player is ready with a day loaded)
-    // 2. Last listened episode (has progress but player isn't active)
-    // 3. Placeholder (nothing played yet)
+    // Tile priority: active playback → last-listened downloaded day → placeholder.
     val activeDay = if (playbackState.currentDayDate != null && playbackState.isReady) {
         uiState.days.find { it.date == playbackState.currentDayDate }
     } else null
@@ -96,7 +93,6 @@ fun EpisodeListScreen(
             .maxByOrNull { it.lastUpdated }
     } else null
 
-    // The day to show in the tile (active playback takes priority)
     val nowPlayingDay = activeDay ?: lastListenedDay
     val isActivePlayback = activeDay != null
 
@@ -105,10 +101,8 @@ fun EpisodeListScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
         EpisodeListHeader()
 
-        // Pull to refresh wraps everything
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { viewModel.refreshFeed() },
@@ -120,13 +114,11 @@ fun EpisodeListScreen(
                     start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp
                 )
             ) {
-                // ── Now Playing section (always visible) ──
                 item(key = "now_playing_header") {
                     SectionHeader(title = "NOW PLAYING")
                 }
                 item(key = "now_playing_card") {
                     if (nowPlayingDay != null) {
-                        // Compute current segment label
                         val segments = remember(nowPlayingDay.segmentsJson) {
                             viewModel.getSegmentsForDay(nowPlayingDay)
                         }
@@ -136,7 +128,7 @@ fun EpisodeListScreen(
                                 if (it.hour == "OMT") "OMT: ${it.title}" else "Hr ${it.hour}: ${it.title}"
                             }
                         } else if (segments.isNotEmpty()) {
-                            // Cold start — figure out which segment from saved position
+                            // No player yet — derive the segment from the saved virtual position.
                             var remaining = nowPlayingDay.listenedPositionMs
                             var segIdx = 0
                             for (i in segments.indices) {
@@ -168,7 +160,6 @@ fun EpisodeListScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // ── Episodes section ──
                 item(key = "episodes_header") {
                     SectionHeader(title = "EPISODES")
                 }
@@ -180,7 +171,6 @@ fun EpisodeListScreen(
                         day = day,
                         isCurrentlyPlaying = isThisDayPlaying,
                         isPlaying = isThisDayPlaying && playbackState.isPlaying,
-                        // Show live position from player if this day is active
                         livePositionMs = if (isThisDayPlaying) playbackState.currentPositionMs else null,
                         liveDurationMs = if (isThisDayPlaying) playbackState.durationMs else null,
                         downloadProgress = downloadProgressMap[day.date],
@@ -253,8 +243,6 @@ private fun EpisodeListHeader() {
     }
 }
 
-// ── Now Playing Card (enhanced) ──
-
 @Composable
 private fun NowPlayingCard(
     day: PodcastDay,
@@ -276,7 +264,6 @@ private fun NowPlayingCard(
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Title row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -327,7 +314,6 @@ private fun NowPlayingCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Progress bar — use live position if active, saved position otherwise
             val positionMs = if (isActivePlayback) playbackState.currentPositionMs else day.listenedPositionMs
             val durationMs = if (isActivePlayback && playbackState.durationMs > 0) {
                 playbackState.durationMs
@@ -351,7 +337,6 @@ private fun NowPlayingCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Time display
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -375,14 +360,12 @@ private fun NowPlayingCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Transport controls — show skip buttons only for active playback
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isActivePlayback) {
-                    // -30s
                     IconButton(
                         onClick = onSkipBack,
                         modifier = Modifier
@@ -401,7 +384,6 @@ private fun NowPlayingCard(
                     Spacer(modifier = Modifier.width(16.dp))
                 }
 
-                // Play/Pause
                 IconButton(
                     onClick = onTogglePlay,
                     modifier = Modifier
@@ -423,7 +405,6 @@ private fun NowPlayingCard(
                 if (isActivePlayback) {
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    // +30s
                     IconButton(
                         onClick = onSkipForward,
                         modifier = Modifier
@@ -443,8 +424,6 @@ private fun NowPlayingCard(
         }
     }
 }
-
-// ── Now Playing Placeholder ──
 
 @Composable
 private fun NowPlayingPlaceholder() {
@@ -490,8 +469,6 @@ private fun NowPlayingPlaceholder() {
     }
 }
 
-// ── Episode Day Card ──
-
 @Composable
 private fun EpisodeDayCard(
     day: PodcastDay,
@@ -509,7 +486,6 @@ private fun EpisodeDayCard(
     val isDownloaded = downloadState == DownloadState.DOWNLOADED
     val isNotDownloaded = downloadState == DownloadState.NONE
 
-    // Confirmation dialog for delete
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
@@ -559,7 +535,6 @@ private fun EpisodeDayCard(
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        // Playing indicator
                         if (isCurrentlyPlaying) {
                             Icon(
                                 Icons.Filled.GraphicEq,
@@ -574,7 +549,6 @@ private fun EpisodeDayCard(
                         }
                     }
 
-                    // Playing status line
                     if (isCurrentlyPlaying) {
                         Text(
                             text = if (isPlaying) "Playing now" else "Paused",
@@ -617,7 +591,6 @@ private fun EpisodeDayCard(
 
             when (downloadState) {
                 DownloadState.DOWNLOADED -> {
-                    // Use live position from player if this day is active, otherwise saved position
                     val displayPositionMs = livePositionMs ?: day.listenedPositionMs
                     val displayDurationMs = liveDurationMs?.takeIf { it > 0 } ?: day.totalDurationMs
 
@@ -667,7 +640,6 @@ private fun EpisodeDayCard(
                                 }
                             }
 
-                            // Delete button — only show when NOT currently playing
                             if (!isCurrentlyPlaying) {
                                 IconButton(
                                     onClick = { showDeleteDialog = true },
@@ -691,7 +663,6 @@ private fun EpisodeDayCard(
                     val segFraction = if (downloadProgress != null && downloadProgress.segmentTotalBytes > 0) {
                         downloadProgress.segmentBytesDownloaded.toFloat() / downloadProgress.segmentTotalBytes
                     } else 0f
-                    // Overall = (completed segments + current segment fraction) / total
                     val overallProgress = if (segTotal > 0) {
                         ((segNum - 1) + segFraction) / segTotal
                     } else 0f

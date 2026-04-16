@@ -79,8 +79,6 @@ class XFeedParser @Inject constructor(
                     if (parser.name == "item" && inItem) {
                         inItem = false
 
-                        // Extract tweet ID from the URL
-                        // URL format: https://x.com/username/status/1234567890
                         val tweetId = extractTweetId(link)
                         if (tweetId != null) {
                             items.add(
@@ -101,9 +99,6 @@ class XFeedParser @Inject constructor(
         return items.sortedByDescending { it.timestampMs }
     }
 
-    /**
-     * Extract the tweet ID from a URL like https://x.com/user/status/1234567890
-     */
     private fun extractTweetId(url: String): String? {
         val regex = Regex("/status/(\\d+)")
         return regex.find(url)?.groupValues?.get(1)

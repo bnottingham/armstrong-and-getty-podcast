@@ -68,8 +68,6 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-// ── Bottom nav tabs ──
-
 private sealed class BottomTab(val route: String, val label: String, val icon: ImageVector) {
     data object Podcast : BottomTab("episodes", "Podcast", Icons.Filled.Headphones)
     data object XFeed : BottomTab("xfeed", "X", Icons.Filled.Tag)
@@ -87,7 +85,6 @@ fun AGPodcastNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Track X tab visibility for polling interval changes
     LaunchedEffect(currentRoute) {
         if (currentRoute == "xfeed") {
             xFeedViewModel.onTabVisible()
@@ -96,10 +93,8 @@ fun AGPodcastNavigation() {
         }
     }
 
-    // Observe unread count for the X tab badge
     val xUnreadCount by xFeedViewModel.unreadCount.collectAsState()
 
-    // Only show bottom bar on the top-level tab screens
     val showBottomBar = currentRoute in bottomTabs.map { it.route }
     val isPlayerRoute = currentRoute?.startsWith("player/") == true
 

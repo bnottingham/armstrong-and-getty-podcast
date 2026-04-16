@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-// Brand colors
 val Gold = Color(0xFFE8B34B)
 val GoldDark = Color(0xFFD4952A)
 val DarkBg = Color(0xFF0E0F13)

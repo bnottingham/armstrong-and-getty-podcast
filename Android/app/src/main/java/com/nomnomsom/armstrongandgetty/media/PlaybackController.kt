@@ -25,14 +25,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Positions/durations here are "virtual" — measured across the concatenated
+ * playlist of segments, not within a single MediaItem.
+ */
 data class PlaybackState(
     val isPlaying: Boolean = false,
-    val currentPositionMs: Long = 0L, // Virtual position across all segments
-    val durationMs: Long = 0L, // Total duration across all segments
+    val currentPositionMs: Long = 0L,
+    val durationMs: Long = 0L,
     val playbackSpeed: Float = 1f,
     val currentDayDate: String? = null,
-    val currentSegmentIndex: Int = 0, // Which segment is currently playing
-    val positionInSegmentMs: Long = 0L, // Position within the current segment
+    val currentSegmentIndex: Int = 0,
+    val positionInSegmentMs: Long = 0L,
     val isReady: Boolean = false
 )
 
@@ -50,9 +54,8 @@ class PlaybackController @Inject constructor(
 
     private var currentDayDate: String? = null
 
-    // Actual measured durations for each segment in the current playlist
     private var segmentDurations: List<Long> = emptyList()
-    // Cumulative start times: segmentStartMs[i] = sum of durations[0..i-1]
+    /** Cumulative start times: `segmentStartMs[i]` = sum of durations `[0..i-1]`. */
     private var segmentStartMs: List<Long> = emptyList()
 
     fun connect() {
@@ -80,15 +83,9 @@ class PlaybackController @Inject constructor(
     }
 
     /**
-     * Play a day's podcast as a playlist of individual segment files.
-     *
-     * @param dayDate The date key
-     * @param title The display title
-     * @param segmentFilePaths List of file paths, one per segment
-     * @param segmentTitles List of titles for each segment
-     * @param remoteUrls Original remote URLs (required for casting)
-     * @param actualDurations Measured durations for each segment in ms
-     * @param startPositionMs Virtual start position across all segments
+     * Play a day's podcast as a playlist of segment files.
+     * `remoteUrls` is stored in each MediaItem's extras and used when switching to
+     * CastPlayer, which can't stream file:// URIs.
      */
     fun playPlaylist(
         dayDate: String,
@@ -104,7 +101,6 @@ class PlaybackController @Inject constructor(
         currentDayDate = dayDate
         segmentDurations = actualDurations
 
-        // Compute cumulative start times
         segmentStartMs = buildList {
             var cumulative = 0L
             for (dur in actualDurations) {
@@ -113,7 +109,6 @@ class PlaybackController @Inject constructor(
             }
         }
 
-        // Build media items for each segment
         val mediaItems = segmentFilePaths.mapIndexed { index, path ->
             val segTitle = segmentTitles.getOrElse(index) { "Segment ${index + 1}" }
             val remoteUrl = remoteUrls.getOrElse(index) { "" }
@@ -140,7 +135,6 @@ class PlaybackController @Inject constructor(
         ctrl.setMediaItems(mediaItems)
         ctrl.prepare()
 
-        // Seek to the correct segment and position within it
         if (startPositionMs > 0 && segmentStartMs.isNotEmpty()) {
             val (segIndex, posInSeg) = virtualPosToSegmentPos(startPositionMs)
             ctrl.seekTo(segIndex, posInSeg)
@@ -153,10 +147,7 @@ class PlaybackController @Inject constructor(
         }
     }
 
-    /**
-     * Append new segments to the current playlist without interrupting playback.
-     * Called when new segments are downloaded for the currently-playing day.
-     */
+    /** Append newly-downloaded segments for the currently-playing day without interrupting playback. */
     fun appendToPlaylist(
         dayTitle: String,
         newSegmentFilePaths: List<String>,
@@ -166,7 +157,6 @@ class PlaybackController @Inject constructor(
     ) {
         val ctrl = controller ?: return
 
-        // Extend duration bookkeeping
         segmentDurations = segmentDurations + newActualDurations
         segmentStartMs = buildList {
             var cumulative = 0L
@@ -176,7 +166,6 @@ class PlaybackController @Inject constructor(
             }
         }
 
-        // Build new MediaItems and append to ExoPlayer playlist
         val existingCount = ctrl.mediaItemCount
         val mediaItems = newSegmentFilePaths.mapIndexed { i, path ->
             val segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" }
@@ -218,18 +207,12 @@ class PlaybackController @Inject constructor(
         if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
     }
 
-    /**
-     * Seek to a virtual position across all segments.
-     */
     fun seekTo(virtualPositionMs: Long) {
         val ctrl = controller ?: return
         val (segIndex, posInSeg) = virtualPosToSegmentPos(virtualPositionMs)
         ctrl.seekTo(segIndex, posInSeg)
     }
 
-    /**
-     * Seek to the start of a specific segment.
-     */
     fun seekToSegment(segmentIndex: Int) {
         val ctrl = controller ?: return
         if (segmentIndex in 0 until ctrl.mediaItemCount) {
@@ -257,9 +240,6 @@ class PlaybackController @Inject constructor(
         return nextSpeed
     }
 
-    /**
-     * Get the current virtual position across all segments.
-     */
     fun computeVirtualPosition(): Long {
         val ctrl = controller ?: return 0L
         val segIndex = ctrl.currentMediaItemIndex

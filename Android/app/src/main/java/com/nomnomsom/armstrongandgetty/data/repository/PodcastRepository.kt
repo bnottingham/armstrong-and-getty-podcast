@@ -223,9 +223,6 @@ class PodcastRepository @Inject constructor(
         dao.resetProgress(date)
     }
 
-    /**
-     * Delete a day's episode: remove audio files from disk and delete the DB record.
-     */
     suspend fun deleteDay(date: String) {
         audioDownloader.deleteSegmentFiles(date)
         dao.deleteDay(date)
@@ -239,8 +236,6 @@ class PodcastRepository @Inject constructor(
             emptyList()
         }
     }
-
-    // ── Private helpers ──────────────────────────────────
 
     private fun groupItemsByDate(items: List<RssItem>): Map<String, List<RssItem>> {
         val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss", Locale.US).apply {

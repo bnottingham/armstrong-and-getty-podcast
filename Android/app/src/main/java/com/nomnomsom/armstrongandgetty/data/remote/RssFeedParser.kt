@@ -80,10 +80,7 @@ class RssFeedParser @Inject constructor(
                             "title" -> title = text
                             "description" -> description = text
                             "pubDate" -> pubDate = text
-                            "duration" -> {
-                                // itunes:duration can be seconds or HH:MM:SS
-                                durationSeconds = parseDuration(text)
-                            }
+                            "duration" -> durationSeconds = parseDuration(text)
                         }
                     }
                 }
@@ -112,8 +109,8 @@ class RssFeedParser @Inject constructor(
         return items
     }
 
+    /** itunes:duration may be "2100" (seconds), "35:00" (mm:ss), or "1:05:30" (h:mm:ss). */
     private fun parseDuration(text: String): Long {
-        // Could be "2100" (seconds) or "35:00" (mm:ss) or "1:05:30" (h:mm:ss)
         return try {
             val parts = text.split(":")
             when (parts.size) {
@@ -137,7 +134,6 @@ class RssFeedParser @Inject constructor(
     }
 
     private fun cleanDescription(html: String): String {
-        // Strip HTML tags and clean up
         return html
             .replace(Regex("<[^>]*>"), "")
             .replace("&amp;", "&")

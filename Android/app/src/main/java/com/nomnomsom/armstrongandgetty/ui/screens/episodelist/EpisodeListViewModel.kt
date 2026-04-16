@@ -25,10 +25,10 @@ data class EpisodeListUiState(
 )
 
 data class DownloadProgress(
-    val currentSegment: Int,       // 0-based index of the segment being downloaded
-    val totalSegments: Int,        // total segment count for the day
+    val currentSegment: Int,
+    val totalSegments: Int,
     val segmentBytesDownloaded: Long,
-    val segmentTotalBytes: Long    // -1 if unknown
+    val segmentTotalBytes: Long // -1 when Content-Length is unknown
 )
 
 @HiltViewModel
@@ -75,9 +75,8 @@ class EpisodeListViewModel @Inject constructor(
                         latestDay.downloadState == DownloadState.DOWNLOADED.value -> {
                             val segments = repository.parseSegments(latestDay.segmentsJson)
                             when {
-                                // Day still in progress — check for new segments (e.g. live show)
                                 !latestDay.isComplete -> checkForNewSegments(latestDate)
-                                // Day complete but not all files on disk (e.g. OMT added after initial download)
+                                // A complete day can still be missing files if OMT was added after initial download.
                                 !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> downloadDay(latestDate)
                             }
                         }
@@ -103,7 +102,6 @@ class EpisodeListViewModel @Inject constructor(
                     segmentTotalBytes = totalBytes
                 ))
             }
-            // Clear progress when download completes (success or failure)
             _downloadProgress.value = _downloadProgress.value - date
         }
     }
@@ -130,7 +128,7 @@ class EpisodeListViewModel @Inject constructor(
         val segments = repository.parseSegments(day.segmentsJson)
         val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
 
-        // Only include segments whose files exist on disk (OMT may not be downloaded yet)
+        // OMT may be added after the rest of the day is already downloaded — skip missing files.
         val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
         if (paired.isEmpty()) return
         val (playableSegments, filePaths) = paired.unzip()
@@ -161,7 +159,7 @@ class EpisodeListViewModel @Inject constructor(
         val segments = repository.parseSegments(day.segmentsJson)
         val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
 
-        // Only include segments whose files exist on disk (OMT may not be downloaded yet)
+        // OMT may be added after the rest of the day is already downloaded — skip missing files.
         val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
         if (paired.isEmpty()) return
         val (playableSegments, filePaths) = paired.unzip()
@@ -201,19 +199,16 @@ class EpisodeListViewModel @Inject constructor(
         return repository.parseSegments(day.segmentsJson)
     }
 
-    // ── Progress persistence (local only) ───────────────
-
     fun saveListenProgress() {
         val state = playbackState.value
         val date = state.currentDayDate ?: return
         if (state.durationMs <= 0) return
-        // Don't overwrite real progress with 0 during player state transitions
+        // Player briefly reports position 0 during transitions — don't clobber saved progress.
         if (state.currentPositionMs <= 0) return
 
         val isListened = state.currentPositionMs >= state.durationMs - 5000
 
-        // Use NonCancellable so the DB write completes even during scope cancellation
-        // (e.g. when onCleared() fires and viewModelScope is about to be cancelled)
+        // NonCancellable so the write survives onCleared() cancelling viewModelScope.
         viewModelScope.launch {
             withContext(NonCancellable) {
                 repository.updateListenProgress(date, state.currentPositionMs, isListened)
