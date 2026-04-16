@@ -32,7 +32,6 @@ data class PlaybackState(
     val playbackSpeed: Float = 1f,
     val currentDayDate: String? = null,
     val currentSegmentIndex: Int = 0, // Which segment is currently playing
-    val positionInSegmentMs: Long = 0L, // Position within the current segment
     val isReady: Boolean = false
 )
 
@@ -205,10 +204,6 @@ class PlaybackController @Inject constructor(
         updateState()
     }
 
-    fun resume() {
-        controller?.play()
-    }
-
     fun pause() {
         controller?.pause()
     }
@@ -321,7 +316,6 @@ class PlaybackController @Inject constructor(
             playbackSpeed = ctrl.playbackParameters.speed,
             currentDayDate = currentDayDate,
             currentSegmentIndex = segIndex,
-            positionInSegmentMs = posInSeg,
             isReady = ctrl.playbackState == Player.STATE_READY || ctrl.playbackState == Player.STATE_BUFFERING
         )
     }

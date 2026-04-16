@@ -167,12 +167,4 @@ class AudioDownloader @Inject constructor(
     fun deleteSegmentFiles(date: String) {
         podcastDir.listFiles()?.filter { it.name.startsWith("ag_${date}_seg") }?.forEach { it.delete() }
     }
-
-    // Legacy: also clean up old combined files if they exist
-    fun deleteCombinedFile(date: String) {
-        File(podcastDir, "ag_$date.mp3").delete()
-        deleteSegmentFiles(date)
-    }
-
-    fun hasCombinedFile(date: String): Boolean = false // No longer used
 }

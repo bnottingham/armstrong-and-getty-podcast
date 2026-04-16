@@ -86,7 +86,6 @@ class XFeedParser @Inject constructor(
                             items.add(
                                 XFeedItem(
                                     tweetId = tweetId,
-                                    postUrl = link,
                                     timestampMs = parsePubDate(pubDate)
                                 )
                             )
