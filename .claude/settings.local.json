@@ -6,7 +6,20 @@
       "Bash(./gradlew compileDebugKotlin)",
       "Bash(pip install:*)",
       "Bash(python3 -m pip install playwright)",
-      "Bash(python3 -m playwright install chromium)"
+      "Bash(python3 -m playwright install chromium)",
+      "Bash(git merge *)",
+      "Bash(git add *)",
+      "Bash(git -c commit.gpgsign=false commit -m \"Merge weak-types improvements\")",
+      "Bash(git stash *)",
+      "Bash(git -c commit.gpgsign=false commit -m \"Merge error-handling cleanup\")",
+      "Bash(git -c commit.gpgsign=false commit -m \"Merge unused-code removal\")",
+      "Bash(git -c commit.gpgsign=false commit -m \"Merge DownloadProgress type consolidation\")",
+      "Bash(git -c commit.gpgsign=false commit -m \"Merge deduplication: HTTP UA, RSS dates, Segment helpers\")",
+      "Bash(git checkout *)",
+      "Bash(git rm *)",
+      "Bash(git -c commit.gpgsign=false commit -m \"Replace python-transcription with python-twitter; gitignore browser_data\")",
+      "Bash(./gradlew :app:compileDebugKotlin)",
+      "Bash(git worktree *)"
     ]
   }
 }
