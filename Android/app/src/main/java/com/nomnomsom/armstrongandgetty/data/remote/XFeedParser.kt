@@ -1,6 +1,7 @@
 package com.nomnomsom.armstrongandgetty.data.remote
 
 import com.nomnomsom.armstrongandgetty.data.model.XFeedItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -8,6 +9,7 @@ import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.StringReader
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -37,6 +39,8 @@ class XFeedParser @Inject constructor(
             val body = response.body?.string() ?: ""
             val items = parseRss(body)
             Result.success(items)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -120,7 +124,7 @@ class XFeedParser @Inject constructor(
                     timeZone = TimeZone.getTimeZone("GMT")
                 }
                 return sdf.parse(pubDate)?.time ?: continue
-            } catch (_: Exception) {
+            } catch (_: ParseException) {
                 continue
             }
         }

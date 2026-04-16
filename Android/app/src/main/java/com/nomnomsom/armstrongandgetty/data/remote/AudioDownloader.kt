@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -81,6 +82,8 @@ class AudioDownloader @Inject constructor(
             }
 
             Result.success(DownloadResult(allPaths, allDurations))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -125,8 +128,6 @@ class AudioDownloader @Inject constructor(
                 MediaMetadataRetriever.METADATA_KEY_DURATION
             )
             durationStr?.toLongOrNull() ?: 0L
-        } catch (_: Exception) {
-            0L
         } finally {
             retriever.release()
         }
