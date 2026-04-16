@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
@@ -70,9 +71,9 @@ class EpisodeListViewModel @Inject constructor(
 
                 val latestDay = repository.getDayByDate(latestDate)
                 if (latestDay != null) {
-                    when {
-                        latestDay.downloadState == DownloadState.NONE.value -> downloadDay(latestDate)
-                        latestDay.downloadState == DownloadState.DOWNLOADED.value -> {
+                    when (latestDay.state) {
+                        DownloadState.NONE -> downloadDay(latestDate)
+                        DownloadState.DOWNLOADED -> {
                             val segments = repository.parseSegments(latestDay.segmentsJson)
                             when {
                                 // Day still in progress — check for new segments (e.g. live show)
@@ -81,7 +82,8 @@ class EpisodeListViewModel @Inject constructor(
                                 !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> downloadDay(latestDate)
                             }
                         }
-                        latestDay.downloadState == DownloadState.ERROR.value -> downloadDay(latestDate)
+                        DownloadState.ERROR -> downloadDay(latestDate)
+                        DownloadState.DOWNLOADING -> Unit // already in progress, don't re-kick
                     }
                 }
             } else {
@@ -124,7 +126,7 @@ class EpisodeListViewModel @Inject constructor(
     }
 
     fun loadDay(day: PodcastDay) {
-        if (day.downloadState != DownloadState.DOWNLOADED.value) return
+        if (day.state != DownloadState.DOWNLOADED) return
         if (playbackState.value.currentDayDate == day.date) return
 
         val segments = repository.parseSegments(day.segmentsJson)
@@ -156,7 +158,7 @@ class EpisodeListViewModel @Inject constructor(
     }
 
     fun playDay(day: PodcastDay) {
-        if (day.downloadState != DownloadState.DOWNLOADED.value) return
+        if (day.state != DownloadState.DOWNLOADED) return
 
         val segments = repository.parseSegments(day.segmentsJson)
         val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)

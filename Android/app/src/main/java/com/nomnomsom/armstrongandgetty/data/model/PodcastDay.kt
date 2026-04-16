@@ -18,7 +18,14 @@ data class PodcastDay(
     val totalDurationMs: Long, // Combined duration of all segments in ms
     val segmentCount: Int, // Number of segments (hours) in this day
 
-    val downloadState: String, // "none", "downloading", "downloaded", "error"
+    /**
+     * Stored as one of [DownloadState]'s `value` strings ("none", "downloading",
+     * "downloaded", "error"). Prefer the typed [state] accessor for reads; this
+     * raw string is kept for Room persistence (existing DB column type) and for
+     * SQL queries in [com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao]
+     * that filter on the literal string `'downloaded'`.
+     */
+    val downloadState: String,
     val combinedFilePath: String?, // Path to combined audio file on disk
     val isComplete: Boolean, // Whether the show is done for the day (all hours posted)
 
@@ -27,3 +34,11 @@ data class PodcastDay(
 
     val lastUpdated: Long // Timestamp for when we last checked/updated this day
 )
+
+/**
+ * Typed view of [PodcastDay.downloadState]. Prefer this at call-sites over
+ * comparing raw `.value` strings — it removes the magic-string footprint
+ * introduced by the Room-persisted column.
+ */
+val PodcastDay.state: DownloadState
+    get() = DownloadState.fromValue(downloadState)

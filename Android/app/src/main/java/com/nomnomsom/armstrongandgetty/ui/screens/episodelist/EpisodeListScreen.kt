@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
+import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
@@ -92,7 +93,7 @@ fun EpisodeListScreen(
 
     val lastListenedDay = if (activeDay == null) {
         uiState.days
-            .filter { it.listenedPositionMs > 0 && it.downloadState == DownloadState.DOWNLOADED.value }
+            .filter { it.listenedPositionMs > 0 && it.state == DownloadState.DOWNLOADED }
             .maxByOrNull { it.lastUpdated }
     } else null
 
@@ -185,7 +186,7 @@ fun EpisodeListScreen(
                         liveDurationMs = if (isThisDayPlaying) playbackState.durationMs else null,
                         downloadProgress = downloadProgressMap[day.date],
                         onClick = {
-                            if (day.downloadState == DownloadState.DOWNLOADED.value) {
+                            if (day.state == DownloadState.DOWNLOADED) {
                                 onEpisodeClick(day)
                             }
                         },
@@ -505,7 +506,7 @@ private fun EpisodeDayCard(
     onReset: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val downloadState = DownloadState.fromValue(day.downloadState)
+    val downloadState = day.state
     val isDownloaded = downloadState == DownloadState.DOWNLOADED
     val isNotDownloaded = downloadState == DownloadState.NONE
 

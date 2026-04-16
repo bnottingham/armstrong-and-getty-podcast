@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
+import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -116,7 +117,7 @@ class PlaybackService : MediaLibraryService() {
             val finalUri = if (uri?.scheme == "file") {
                 // If it's a local file, we need the original remote URL for casting
                 // We'll rely on the mediaId or metadata if we stored it there
-                oldItem.mediaMetadata.extras?.getString("remote_url")?.let { Uri.parse(it) } ?: uri
+                oldItem.mediaMetadata.extras?.getString(EXTRA_REMOTE_URL)?.let { Uri.parse(it) } ?: uri
             } else {
                 uri
             }
