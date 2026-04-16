@@ -2,6 +2,7 @@ package com.nomnomsom.armstrongandgetty.data.remote
 
 import android.content.Context
 import android.media.MediaMetadataRetriever
+import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -18,14 +19,8 @@ data class DownloadResult(
     val segmentActualDurationsMs: List<Long>
 )
 
-/**
- * Callback for download progress.
- * @param segmentIndex 0-based index of the segment currently downloading
- * @param segmentCount total number of segments for this day
- * @param bytesDownloaded bytes downloaded for the current segment so far
- * @param totalBytes total bytes for the current segment (-1 if unknown)
- */
-typealias DownloadProgressCallback = (segmentIndex: Int, segmentCount: Int, bytesDownloaded: Long, totalBytes: Long) -> Unit
+/** Callback invoked with per-segment byte-level download progress. */
+typealias DownloadProgressCallback = (DownloadProgress) -> Unit
 
 @Singleton
 class AudioDownloader @Inject constructor(
@@ -69,11 +64,25 @@ class AudioDownloader @Inject constructor(
                     }
                     allDurations.add(dur)
                     // Report as fully complete for this segment
-                    onProgress?.invoke(index, totalSegments, segFile.length(), segFile.length())
+                    onProgress?.invoke(
+                        DownloadProgress(
+                            currentSegment = index,
+                            totalSegments = totalSegments,
+                            segmentBytesDownloaded = segFile.length(),
+                            segmentTotalBytes = segFile.length()
+                        )
+                    )
                 } else {
                     // Download new segment with progress
                     downloadFile(segment.audioUrl, segFile) { bytesDownloaded, totalBytes ->
-                        onProgress?.invoke(index, totalSegments, bytesDownloaded, totalBytes)
+                        onProgress?.invoke(
+                            DownloadProgress(
+                                currentSegment = index,
+                                totalSegments = totalSegments,
+                                segmentBytesDownloaded = bytesDownloaded,
+                                segmentTotalBytes = totalBytes
+                            )
+                        )
                     }
                     allPaths.add(segFile.absolutePath)
                     allDurations.add(measureDuration(segFile))
