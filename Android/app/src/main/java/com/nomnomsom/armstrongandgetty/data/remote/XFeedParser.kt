@@ -1,16 +1,14 @@
 package com.nomnomsom.armstrongandgetty.data.remote
 
 import com.nomnomsom.armstrongandgetty.data.model.XFeedItem
+import com.nomnomsom.armstrongandgetty.util.appGetRequest
+import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.StringReader
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,12 +22,7 @@ class XFeedParser @Inject constructor(
 
     suspend fun fetchFeed(): Result<List<XFeedItem>> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url(FEED_URL)
-                .header("User-Agent", "ArmstrongGettyPodcast/1.0")
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
+            val response = okHttpClient.newCall(appGetRequest(FEED_URL)).execute()
             if (!response.isSuccessful) {
                 return@withContext Result.failure(Exception("HTTP ${response.code}"))
             }
@@ -87,7 +80,7 @@ class XFeedParser @Inject constructor(
                                 XFeedItem(
                                     tweetId = tweetId,
                                     postUrl = link,
-                                    timestampMs = parsePubDate(pubDate)
+                                    timestampMs = parseRssPubDateMs(pubDate)
                                 )
                             )
                         }
@@ -107,23 +100,5 @@ class XFeedParser @Inject constructor(
     private fun extractTweetId(url: String): String? {
         val regex = Regex("/status/(\\d+)")
         return regex.find(url)?.groupValues?.get(1)
-    }
-
-    private fun parsePubDate(pubDate: String): Long {
-        val formats = listOf(
-            "EEE, dd MMM yyyy HH:mm:ss z",
-            "EEE, dd MMM yyyy HH:mm:ss Z"
-        )
-        for (format in formats) {
-            try {
-                val sdf = SimpleDateFormat(format, Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("GMT")
-                }
-                return sdf.parse(pubDate)?.time ?: continue
-            } catch (_: Exception) {
-                continue
-            }
-        }
-        return 0L
     }
 }

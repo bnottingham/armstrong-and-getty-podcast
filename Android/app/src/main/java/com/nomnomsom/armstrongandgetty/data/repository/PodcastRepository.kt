@@ -7,14 +7,18 @@ import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
+import com.nomnomsom.armstrongandgetty.data.remote.DownloadResult
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
+import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
+import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
+import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -129,24 +133,12 @@ class PodcastRepository @Inject constructor(
         )
 
         return if (downloadResult.isSuccess) {
-            val result = downloadResult.getOrThrow()
-
-            val updatedSegments = segments.mapIndexed { index, seg ->
-                val actualDur = result.segmentActualDurationsMs.getOrElse(index) { 0L }
-                if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
-            }
-            val updatedJson = gson.toJson(updatedSegments)
-            val actualTotal = updatedSegments.sumOf { it.actualDurationMs.takeIf { d -> d > 0 } ?: it.durationMs }
-
-            dao.updateDownloadComplete(date, DownloadState.DOWNLOADED.value, date)
-            dao.updateSegments(
+            persistDownloadedSegments(
                 date = date,
-                segmentsJson = updatedJson,
-                totalDurationMs = actualTotal,
-                segmentCount = updatedSegments.size,
+                baseSegments = segments,
+                dlResult = downloadResult.getOrThrow(),
                 summary = day.summary,
-                isComplete = day.isComplete,
-                lastUpdated = System.currentTimeMillis()
+                isComplete = day.isComplete
             )
             Result.success(date)
         } else {
@@ -182,29 +174,40 @@ class PodcastRepository @Inject constructor(
         )
 
         return if (result.isSuccess) {
-            val dlResult = result.getOrThrow()
-
-            val finalSegments = updatedSegments.mapIndexed { index, seg ->
-                val actualDur = dlResult.segmentActualDurationsMs.getOrElse(index) { 0L }
-                if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
-            }
-            val finalJson = gson.toJson(finalSegments)
-            val actualTotal = finalSegments.sumOf { it.actualDurationMs.takeIf { d -> d > 0 } ?: it.durationMs }
-
-            dao.updateDownloadComplete(date, DownloadState.DOWNLOADED.value, date)
-            dao.updateSegments(
+            persistDownloadedSegments(
                 date = date,
-                segmentsJson = finalJson,
-                totalDurationMs = actualTotal,
-                segmentCount = finalSegments.size,
+                baseSegments = updatedSegments,
+                dlResult = result.getOrThrow(),
                 summary = updatedDay.summary,
-                isComplete = updatedDay.isComplete,
-                lastUpdated = System.currentTimeMillis()
+                isComplete = updatedDay.isComplete
             )
             Result.success(date)
         } else {
             Result.failure(result.exceptionOrNull() ?: Exception("Download failed"))
         }
+    }
+
+    private suspend fun persistDownloadedSegments(
+        date: String,
+        baseSegments: List<Segment>,
+        dlResult: DownloadResult,
+        summary: String,
+        isComplete: Boolean
+    ) {
+        val merged = baseSegments.mapIndexed { index, seg ->
+            val actualDur = dlResult.segmentActualDurationsMs.getOrElse(index) { 0L }
+            if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
+        }
+        dao.updateDownloadComplete(date, DownloadState.DOWNLOADED.value, date)
+        dao.updateSegments(
+            date = date,
+            segmentsJson = gson.toJson(merged),
+            totalDurationMs = merged.sumOf { it.effectiveDurationMs },
+            segmentCount = merged.size,
+            summary = summary,
+            isComplete = isComplete,
+            lastUpdated = System.currentTimeMillis()
+        )
     }
 
     fun getSegmentFilePaths(date: String, segmentCount: Int): List<String> {
@@ -243,43 +246,14 @@ class PodcastRepository @Inject constructor(
     // ── Private helpers ──────────────────────────────────
 
     private fun groupItemsByDate(items: List<RssItem>): Map<String, List<RssItem>> {
-        val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("GMT")
-        }
-        val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
         return items.mapNotNull { item ->
-            try {
-                val cleanDate = item.pubDate
-                    .replace(" GMT", "")
-                    .replace(" +0000", "")
-                    .replace(" -0000", "")
-                val parsed = dateFormat.parse(cleanDate)
-                if (parsed != null) {
-                    dayFormat.format(parsed) to item
-                } else null
-            } catch (_: Exception) {
-                null
-            }
+            parseRssPubDate(item.pubDate)?.let { formatAsDayKey(it) to item }
         }
             .groupBy({ it.first }, { it.second })
             .toSortedMap(compareByDescending { it })
     }
 
-    private fun parsePubDate(pubDate: String): Long {
-        val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("GMT")
-        }
-        return try {
-            val cleanDate = pubDate
-                .replace(" GMT", "")
-                .replace(" +0000", "")
-                .replace(" -0000", "")
-            dateFormat.parse(cleanDate)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
+    private fun parsePubDate(pubDate: String): Long = parseRssPubDateMs(pubDate)
 
     private fun extractHourLabel(title: String, fallbackIndex: Int): String {
         val hourPattern = Regex("Hour\\s+(\\d+)", RegexOption.IGNORE_CASE)

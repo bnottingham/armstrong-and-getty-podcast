@@ -103,38 +103,16 @@ class PlaybackController @Inject constructor(
         val ctrl = controller ?: return
         currentDayDate = dayDate
         segmentDurations = actualDurations
+        segmentStartMs = cumulativeStarts(actualDurations)
 
-        // Compute cumulative start times
-        segmentStartMs = buildList {
-            var cumulative = 0L
-            for (dur in actualDurations) {
-                add(cumulative)
-                cumulative += dur
-            }
-        }
-
-        // Build media items for each segment
         val mediaItems = segmentFilePaths.mapIndexed { index, path ->
-            val segTitle = segmentTitles.getOrElse(index) { "Segment ${index + 1}" }
-            val remoteUrl = remoteUrls.getOrElse(index) { "" }
-            
-            val extras = Bundle().apply {
-                putString("remote_url", remoteUrl)
-            }
-
-            MediaItem.Builder()
-                .setUri(Uri.parse("file://$path"))
-                .setMimeType(MimeTypes.AUDIO_MPEG)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("$title — $segTitle")
-                        .setArtist("Armstrong & Getty")
-                        .setAlbumTitle("Armstrong & Getty On Demand")
-                        .setTrackNumber(index + 1)
-                        .setExtras(extras)
-                        .build()
-                )
-                .build()
+            buildMediaItem(
+                dayTitle = title,
+                segTitle = segmentTitles.getOrElse(index) { "Segment ${index + 1}" },
+                filePath = path,
+                remoteUrl = remoteUrls.getOrElse(index) { "" },
+                trackNumber = index + 1
+            )
         }
 
         ctrl.setMediaItems(mediaItems)
@@ -166,43 +144,53 @@ class PlaybackController @Inject constructor(
     ) {
         val ctrl = controller ?: return
 
-        // Extend duration bookkeeping
         segmentDurations = segmentDurations + newActualDurations
-        segmentStartMs = buildList {
-            var cumulative = 0L
-            for (dur in segmentDurations) {
-                add(cumulative)
-                cumulative += dur
-            }
-        }
+        segmentStartMs = cumulativeStarts(segmentDurations)
 
-        // Build new MediaItems and append to ExoPlayer playlist
         val existingCount = ctrl.mediaItemCount
         val mediaItems = newSegmentFilePaths.mapIndexed { i, path ->
-            val segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" }
-            val remoteUrl = newRemoteUrls.getOrElse(i) { "" }
-
-            val extras = Bundle().apply {
-                putString("remote_url", remoteUrl)
-            }
-
-            MediaItem.Builder()
-                .setUri(Uri.parse("file://$path"))
-                .setMimeType(MimeTypes.AUDIO_MPEG)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("$dayTitle — $segTitle")
-                        .setArtist("Armstrong & Getty")
-                        .setAlbumTitle("Armstrong & Getty On Demand")
-                        .setTrackNumber(existingCount + i + 1)
-                        .setExtras(extras)
-                        .build()
-                )
-                .build()
+            buildMediaItem(
+                dayTitle = dayTitle,
+                segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" },
+                filePath = path,
+                remoteUrl = newRemoteUrls.getOrElse(i) { "" },
+                trackNumber = existingCount + i + 1
+            )
         }
 
         ctrl.addMediaItems(mediaItems)
         updateState()
+    }
+
+    private fun buildMediaItem(
+        dayTitle: String,
+        segTitle: String,
+        filePath: String,
+        remoteUrl: String,
+        trackNumber: Int
+    ): MediaItem {
+        val extras = Bundle().apply { putString("remote_url", remoteUrl) }
+        return MediaItem.Builder()
+            .setUri(Uri.parse("file://$filePath"))
+            .setMimeType(MimeTypes.AUDIO_MPEG)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("$dayTitle — $segTitle")
+                    .setArtist("Armstrong & Getty")
+                    .setAlbumTitle("Armstrong & Getty On Demand")
+                    .setTrackNumber(trackNumber)
+                    .setExtras(extras)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun cumulativeStarts(durations: List<Long>): List<Long> = buildList {
+        var cumulative = 0L
+        for (dur in durations) {
+            add(cumulative)
+            cumulative += dur
+        }
     }
 
     fun resume() {
@@ -307,16 +295,11 @@ class PlaybackController @Inject constructor(
         val ctrl = controller ?: return
         val segIndex = ctrl.currentMediaItemIndex
         val posInSeg = ctrl.currentPosition.coerceAtLeast(0)
-        val virtualPos = if (segIndex in segmentStartMs.indices) {
-            segmentStartMs[segIndex] + posInSeg
-        } else {
-            posInSeg
-        }
         val totalDuration = segmentDurations.sum().takeIf { it > 0 } ?: ctrl.duration.coerceAtLeast(0)
 
         _playbackState.value = PlaybackState(
             isPlaying = ctrl.isPlaying,
-            currentPositionMs = virtualPos,
+            currentPositionMs = computeVirtualPosition(),
             durationMs = totalDuration,
             playbackSpeed = ctrl.playbackParameters.speed,
             currentDayDate = currentDayDate,
