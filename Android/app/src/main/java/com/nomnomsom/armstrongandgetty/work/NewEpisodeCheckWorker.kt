@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.nomnomsom.armstrongandgetty.MainActivity
 import com.nomnomsom.armstrongandgetty.R
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
+import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -103,7 +104,7 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
                 if (isNew) {
                     Log.d(TAG, "Auto-downloading new episode: ${day.date}")
                     repository.downloadDay(day.date)
-                } else if (hasNewSegments && day.downloadState == DownloadState.DOWNLOADED.value) {
+                } else if (hasNewSegments && day.state == DownloadState.DOWNLOADED) {
                     Log.d(TAG, "Auto-downloading new segments for: ${day.date}")
                     repository.appendNewSegments(day.date)
                 }

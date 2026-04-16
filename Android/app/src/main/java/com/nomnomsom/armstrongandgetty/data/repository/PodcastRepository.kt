@@ -7,6 +7,7 @@ import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
@@ -157,7 +158,7 @@ class PodcastRepository @Inject constructor(
 
     suspend fun appendNewSegments(date: String): Result<String> {
         val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
-        if (day.downloadState != DownloadState.DOWNLOADED.value) {
+        if (day.state != DownloadState.DOWNLOADED) {
             return Result.failure(Exception("Day not downloaded"))
         }
 

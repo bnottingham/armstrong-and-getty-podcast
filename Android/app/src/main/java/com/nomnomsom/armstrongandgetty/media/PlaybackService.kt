@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
+import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -111,7 +112,7 @@ class PlaybackService : MediaLibraryService() {
             val oldItem = oldPlayer.getMediaItemAt(i)
             val uri = oldItem.localConfiguration?.uri
             val finalUri = if (uri?.scheme == "file") {
-                oldItem.mediaMetadata.extras?.getString("remote_url")?.let { Uri.parse(it) } ?: uri
+                oldItem.mediaMetadata.extras?.getString(EXTRA_REMOTE_URL)?.let { Uri.parse(it) } ?: uri
             } else {
                 uri
             }

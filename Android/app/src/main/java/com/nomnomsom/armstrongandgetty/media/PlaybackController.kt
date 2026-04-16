@@ -44,6 +44,12 @@ data class PlaybackState(
 class PlaybackController @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        /** Key used on [MediaMetadata.extras] to carry the remote (streaming) URL
+         *  so Cast can reach the audio when the local MediaItem uri is a `file://` path. */
+        const val EXTRA_REMOTE_URL = "remote_url"
+    }
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
 
@@ -114,7 +120,7 @@ class PlaybackController @Inject constructor(
             val remoteUrl = remoteUrls.getOrElse(index) { "" }
             
             val extras = Bundle().apply {
-                putString("remote_url", remoteUrl)
+                putString(EXTRA_REMOTE_URL, remoteUrl)
             }
 
             MediaItem.Builder()
@@ -172,7 +178,7 @@ class PlaybackController @Inject constructor(
             val remoteUrl = newRemoteUrls.getOrElse(i) { "" }
 
             val extras = Bundle().apply {
-                putString("remote_url", remoteUrl)
+                putString(EXTRA_REMOTE_URL, remoteUrl)
             }
 
             MediaItem.Builder()
