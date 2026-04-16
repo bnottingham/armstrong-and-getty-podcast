@@ -7,6 +7,8 @@ import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.data.model.displayLabel
+import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
@@ -76,7 +78,7 @@ class EpisodeListViewModel @Inject constructor(
                             }
                         }
                         DownloadState.ERROR -> downloadDay(latestDate)
-                        DownloadState.DOWNLOADING -> Unit // already in progress, don't re-kick
+                        DownloadState.DOWNLOADING -> Unit
                     }
                 }
             } else {
@@ -113,71 +115,46 @@ class EpisodeListViewModel @Inject constructor(
     }
 
     fun loadDay(day: PodcastDay) {
-        if (day.state != DownloadState.DOWNLOADED) return
         if (playbackState.value.currentDayDate == day.date) return
-
-        val segments = repository.parseSegments(day.segmentsJson)
-        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
-
-        // OMT may be added after the rest of the day is already downloaded — skip missing files.
-        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
-        if (paired.isEmpty()) return
-        val (playableSegments, filePaths) = paired.unzip()
-
-        val segTitles = playableSegments.map { seg ->
-            if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
-        }
-        val remoteUrls = playableSegments.map { it.audioUrl }
-        val actualDurations = playableSegments.map { seg ->
-            if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
-        }
-
-        playbackController.playPlaylist(
-            dayDate = day.date,
-            title = day.title,
-            segmentFilePaths = filePaths,
-            segmentTitles = segTitles,
-            remoteUrls = remoteUrls,
-            actualDurations = actualDurations,
-            startPositionMs = day.listenedPositionMs,
-            autoPlay = false
-        )
+        preparePlaylist(day, startPositionMs = day.listenedPositionMs, autoPlay = false)
     }
 
     fun playDay(day: PodcastDay) {
-        if (day.state != DownloadState.DOWNLOADED) return
-
-        val segments = repository.parseSegments(day.segmentsJson)
-        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
-
-        // OMT may be added after the rest of the day is already downloaded — skip missing files.
-        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
-        if (paired.isEmpty()) return
-        val (playableSegments, filePaths) = paired.unzip()
-
-        val segTitles = playableSegments.map { seg ->
-            if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
-        }
-        val remoteUrls = playableSegments.map { it.audioUrl }
-        val actualDurations = playableSegments.map { seg ->
-            if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
-        }
-
-        playbackController.playPlaylist(
-            dayDate = day.date,
-            title = day.title,
-            segmentFilePaths = filePaths,
-            segmentTitles = segTitles,
-            remoteUrls = remoteUrls,
-            actualDurations = actualDurations,
-            startPositionMs = if (day.isListened) 0L else day.listenedPositionMs
-        )
-
-        if (day.isListened) {
+        val startPos = if (day.isListened) 0L else day.listenedPositionMs
+        val prepared = preparePlaylist(day, startPositionMs = startPos, autoPlay = true)
+        if (prepared && day.isListened) {
             viewModelScope.launch {
                 repository.resetProgress(day.date)
             }
         }
+    }
+
+    private fun preparePlaylist(
+        day: PodcastDay,
+        startPositionMs: Long,
+        autoPlay: Boolean
+    ): Boolean {
+        if (day.state != DownloadState.DOWNLOADED) return false
+
+        val segments = repository.parseSegments(day.segmentsJson)
+        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
+
+        // OMT may be added after the rest of the day is already downloaded — skip missing files.
+        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
+        if (paired.isEmpty()) return false
+        val (playableSegments, filePaths) = paired.unzip()
+
+        playbackController.playPlaylist(
+            dayDate = day.date,
+            title = day.title,
+            segmentFilePaths = filePaths,
+            segmentTitles = playableSegments.map { it.displayLabel },
+            remoteUrls = playableSegments.map { it.audioUrl },
+            actualDurations = playableSegments.map { it.effectiveDurationMs },
+            startPositionMs = startPositionMs,
+            autoPlay = autoPlay
+        )
+        return true
     }
 
     fun togglePlayPause() = playbackController.togglePlayPause()
@@ -194,12 +171,12 @@ class EpisodeListViewModel @Inject constructor(
         val state = playbackState.value
         val date = state.currentDayDate ?: return
         if (state.durationMs <= 0) return
-        // Player briefly reports position 0 during transitions — don't clobber saved progress.
+        // Don't overwrite real progress with 0 during player state transitions.
         if (state.currentPositionMs <= 0) return
 
         val isListened = state.currentPositionMs >= state.durationMs - 5000
 
-        // NonCancellable so the write survives onCleared() cancelling viewModelScope.
+        // NonCancellable so the DB write completes during onCleared() when viewModelScope is cancelling.
         viewModelScope.launch {
             withContext(NonCancellable) {
                 repository.updateListenProgress(date, state.currentPositionMs, isListened)
@@ -222,20 +199,13 @@ class EpisodeListViewModel @Inject constructor(
                     val newSegments = updatedSegments.subList(previousSegmentCount, updatedSegments.size)
                     val allFilePaths = repository.getSegmentFilePaths(date, updatedSegments.size)
                     val newFilePaths = allFilePaths.subList(previousSegmentCount, allFilePaths.size)
-                    val newTitles = newSegments.map { seg ->
-                        if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
-                    }
-                    val newRemoteUrls = newSegments.map { it.audioUrl }
-                    val newDurations = newSegments.map { seg ->
-                        if (seg.actualDurationMs > 0) seg.actualDurationMs else seg.durationMs
-                    }
 
                     playbackController.appendToPlaylist(
                         dayTitle = updatedDay.title,
                         newSegmentFilePaths = newFilePaths,
-                        newSegmentTitles = newTitles,
-                        newRemoteUrls = newRemoteUrls,
-                        newActualDurations = newDurations
+                        newSegmentTitles = newSegments.map { it.displayLabel },
+                        newRemoteUrls = newSegments.map { it.audioUrl },
+                        newActualDurations = newSegments.map { it.effectiveDurationMs }
                     )
 
                     Log.d(TAG, "Appended ${newSegments.size} new segment(s) to live playlist for $date")

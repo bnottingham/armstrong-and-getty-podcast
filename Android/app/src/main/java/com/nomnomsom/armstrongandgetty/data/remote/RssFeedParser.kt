@@ -1,11 +1,11 @@
 package com.nomnomsom.armstrongandgetty.data.remote
 
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
+import com.nomnomsom.armstrongandgetty.util.appGetRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.StringReader
@@ -22,12 +22,7 @@ class RssFeedParser @Inject constructor(
 
     suspend fun fetchFeed(): Result<List<RssItem>> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url(FEED_URL)
-                .header("User-Agent", "ArmstrongGettyPodcast/1.0")
-                .build()
-
-            okHttpClient.newCall(request).execute().use { response ->
+            okHttpClient.newCall(appGetRequest(FEED_URL)).execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${response.code}"))
                 }

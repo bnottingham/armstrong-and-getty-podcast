@@ -4,12 +4,12 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.util.appGetRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -93,12 +93,7 @@ class AudioDownloader @Inject constructor(
         destination: File,
         onProgress: ((bytesDownloaded: Long, totalBytes: Long) -> Unit)? = null
     ) {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "ArmstrongGettyPodcast/1.0")
-            .build()
-
-        val response = okHttpClient.newCall(request).execute()
+        val response = okHttpClient.newCall(appGetRequest(url)).execute()
         if (!response.isSuccessful) throw Exception("Download failed: HTTP ${response.code}")
 
         val body = response.body ?: throw Exception("Empty response body")

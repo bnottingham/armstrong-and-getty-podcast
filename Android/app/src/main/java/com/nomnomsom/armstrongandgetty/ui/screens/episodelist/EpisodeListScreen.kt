@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
+import com.nomnomsom.armstrongandgetty.data.model.displayLabel
+import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
@@ -126,22 +128,18 @@ fun EpisodeListScreen(
                             viewModel.getSegmentsForDay(nowPlayingDay)
                         }
                         val currentSegmentLabel = if (isActivePlayback && segments.isNotEmpty()) {
-                            val seg = segments.getOrNull(playbackState.currentSegmentIndex)
-                            seg?.let {
-                                if (it.hour == "OMT") "OMT: ${it.title}" else "Hr ${it.hour}: ${it.title}"
-                            }
+                            segments.getOrNull(playbackState.currentSegmentIndex)?.displayLabel
                         } else if (segments.isNotEmpty()) {
                             // No player yet — derive the segment from the saved virtual position.
                             var remaining = nowPlayingDay.listenedPositionMs
                             var segIdx = 0
                             for (i in segments.indices) {
-                                val dur = segments[i].actualDurationMs.takeIf { it > 0 } ?: segments[i].durationMs
+                                val dur = segments[i].effectiveDurationMs
                                 if (remaining < dur) { segIdx = i; break }
                                 remaining -= dur
                                 segIdx = i
                             }
-                            val seg = segments[segIdx]
-                            if (seg.hour == "OMT") "OMT: ${seg.title}" else "Hr ${seg.hour}: ${seg.title}"
+                            segments[segIdx].displayLabel
                         } else null
 
                         NowPlayingCard(
