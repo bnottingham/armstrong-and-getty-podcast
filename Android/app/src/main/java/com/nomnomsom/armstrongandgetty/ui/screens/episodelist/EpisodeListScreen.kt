@@ -70,6 +70,7 @@ import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
 import com.nomnomsom.armstrongandgetty.ui.theme.TextSecondary
 import com.nomnomsom.armstrongandgetty.util.formatDuration
 import com.nomnomsom.armstrongandgetty.util.formatShortDuration
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -742,7 +743,7 @@ private fun EpisodeDayCard(
 private fun DateBadge(dateString: String) {
     val parsed = try {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateString)
-    } catch (_: Exception) { null }
+    } catch (_: ParseException) { null }
 
     val dayOfWeek = parsed?.let {
         SimpleDateFormat("EEE", Locale.US).format(it).uppercase()

@@ -17,6 +17,7 @@ import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 
 /**
  * Periodic worker: refresh the RSS feed, notify on new episodes/segments, and
@@ -111,6 +112,8 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
             }
 
             return Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Worker failed", e)
             return Result.retry()

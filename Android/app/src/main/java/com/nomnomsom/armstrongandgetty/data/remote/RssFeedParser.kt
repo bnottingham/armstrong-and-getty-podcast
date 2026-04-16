@@ -1,6 +1,7 @@
 package com.nomnomsom.armstrongandgetty.data.remote
 
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -35,6 +36,8 @@ class RssFeedParser @Inject constructor(
                 val items = parseRss(body)
                 Result.success(items)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -111,25 +114,21 @@ class RssFeedParser @Inject constructor(
 
     /** itunes:duration may be "2100" (seconds), "35:00" (mm:ss), or "1:05:30" (h:mm:ss). */
     private fun parseDuration(text: String): Long {
-        return try {
-            val parts = text.split(":")
-            when (parts.size) {
-                1 -> parts[0].toLongOrNull() ?: 0L
-                2 -> {
-                    val m = parts[0].toLongOrNull() ?: 0
-                    val s = parts[1].toLongOrNull() ?: 0
-                    m * 60 + s
-                }
-                3 -> {
-                    val h = parts[0].toLongOrNull() ?: 0
-                    val m = parts[1].toLongOrNull() ?: 0
-                    val s = parts[2].toLongOrNull() ?: 0
-                    h * 3600 + m * 60 + s
-                }
-                else -> 0L
+        val parts = text.split(":")
+        return when (parts.size) {
+            1 -> parts[0].toLongOrNull() ?: 0L
+            2 -> {
+                val m = parts[0].toLongOrNull() ?: 0
+                val s = parts[1].toLongOrNull() ?: 0
+                m * 60 + s
             }
-        } catch (_: Exception) {
-            0L
+            3 -> {
+                val h = parts[0].toLongOrNull() ?: 0
+                val m = parts[1].toLongOrNull() ?: 0
+                val s = parts[2].toLongOrNull() ?: 0
+                h * 3600 + m * 60 + s
+            }
+            else -> 0L
         }
     }
 

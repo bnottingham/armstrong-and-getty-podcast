@@ -12,6 +12,7 @@ import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import kotlinx.coroutines.flow.Flow
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -230,12 +231,8 @@ class PodcastRepository @Inject constructor(
     }
 
     fun parseSegments(json: String): List<Segment> {
-        return try {
-            val type = object : TypeToken<List<Segment>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
+        val type = object : TypeToken<List<Segment>>() {}.type
+        return gson.fromJson(json, type) ?: emptyList()
     }
 
     private fun groupItemsByDate(items: List<RssItem>): Map<String, List<RssItem>> {
@@ -254,7 +251,7 @@ class PodcastRepository @Inject constructor(
                 if (parsed != null) {
                     dayFormat.format(parsed) to item
                 } else null
-            } catch (_: Exception) {
+            } catch (_: ParseException) {
                 null
             }
         }
@@ -272,7 +269,7 @@ class PodcastRepository @Inject constructor(
                 .replace(" +0000", "")
                 .replace(" -0000", "")
             dateFormat.parse(cleanDate)?.time ?: 0L
-        } catch (_: Exception) {
+        } catch (_: ParseException) {
             0L
         }
     }
@@ -300,13 +297,9 @@ class PodcastRepository @Inject constructor(
     }
 
     private fun formatDayTitle(date: String): String {
-        return try {
-            val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)
-            val formatted = SimpleDateFormat("MMM d, yyyy", Locale.US).format(parsed!!)
-            "A&G — $formatted"
-        } catch (_: Exception) {
-            "A&G — $date"
-        }
+        val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)
+        val formatted = SimpleDateFormat("MMM d, yyyy", Locale.US).format(parsed!!)
+        return "A&G — $formatted"
     }
 
     private fun buildSummary(segments: List<Segment>): String {
