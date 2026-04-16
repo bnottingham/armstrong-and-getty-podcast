@@ -6,6 +6,5 @@ package com.nomnomsom.armstrongandgetty.data.model
  */
 data class XFeedItem(
     val tweetId: String,
-    val postUrl: String,
     val timestampMs: Long
 )

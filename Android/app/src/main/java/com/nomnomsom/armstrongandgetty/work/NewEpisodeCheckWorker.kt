@@ -60,7 +60,6 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
             val daysAfter = repository.getAllDaysSnapshot()
             var newEpisodeFound = false
             var newSegmentsFound = false
-            var newDayDate: String? = null
             var totalNewSegments = 0
 
             for (day in daysAfter) {
@@ -68,11 +67,9 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
 
                 if (previousCount == null) {
                     newEpisodeFound = true
-                    newDayDate = day.date
                     totalNewSegments += day.segmentCount
                 } else if (day.segmentCount > previousCount) {
                     newSegmentsFound = true
-                    newDayDate = day.date
                     totalNewSegments += (day.segmentCount - previousCount)
                 }
             }
