@@ -2,6 +2,7 @@ package com.nomnomsom.armstrongandgetty.data.remote
 
 import android.content.Context
 import android.media.MediaMetadataRetriever
+import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -19,8 +20,7 @@ data class DownloadResult(
     val segmentActualDurationsMs: List<Long>
 )
 
-/** `totalBytes` is -1 when the server doesn't return a Content-Length. */
-typealias DownloadProgressCallback = (segmentIndex: Int, segmentCount: Int, bytesDownloaded: Long, totalBytes: Long) -> Unit
+typealias DownloadProgressCallback = (DownloadProgress) -> Unit
 
 @Singleton
 class AudioDownloader @Inject constructor(
@@ -56,10 +56,24 @@ class AudioDownloader @Inject constructor(
                         measureDuration(segFile)
                     }
                     allDurations.add(dur)
-                    onProgress?.invoke(index, totalSegments, segFile.length(), segFile.length())
+                    onProgress?.invoke(
+                        DownloadProgress(
+                            currentSegment = index,
+                            totalSegments = totalSegments,
+                            segmentBytesDownloaded = segFile.length(),
+                            segmentTotalBytes = segFile.length()
+                        )
+                    )
                 } else {
                     downloadFile(segment.audioUrl, segFile) { bytesDownloaded, totalBytes ->
-                        onProgress?.invoke(index, totalSegments, bytesDownloaded, totalBytes)
+                        onProgress?.invoke(
+                            DownloadProgress(
+                                currentSegment = index,
+                                totalSegments = totalSegments,
+                                segmentBytesDownloaded = bytesDownloaded,
+                                segmentTotalBytes = totalBytes
+                            )
+                        )
                     }
                     allPaths.add(segFile.absolutePath)
                     allDurations.add(measureDuration(segFile))

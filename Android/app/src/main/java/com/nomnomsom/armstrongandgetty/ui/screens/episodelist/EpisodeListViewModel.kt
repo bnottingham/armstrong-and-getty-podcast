@@ -3,6 +3,7 @@ package com.nomnomsom.armstrongandgetty.ui.screens.episodelist
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
@@ -23,13 +24,6 @@ data class EpisodeListUiState(
     val days: List<PodcastDay> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null
-)
-
-data class DownloadProgress(
-    val currentSegment: Int,
-    val totalSegments: Int,
-    val segmentBytesDownloaded: Long,
-    val segmentTotalBytes: Long // -1 when Content-Length is unknown
 )
 
 @HiltViewModel
@@ -96,13 +90,8 @@ class EpisodeListViewModel @Inject constructor(
 
     fun downloadDay(date: String) {
         viewModelScope.launch {
-            repository.downloadDay(date) { segmentIndex, segmentCount, bytesDownloaded, totalBytes ->
-                _downloadProgress.value = _downloadProgress.value + (date to DownloadProgress(
-                    currentSegment = segmentIndex,
-                    totalSegments = segmentCount,
-                    segmentBytesDownloaded = bytesDownloaded,
-                    segmentTotalBytes = totalBytes
-                ))
+            repository.downloadDay(date) { progress ->
+                _downloadProgress.value = _downloadProgress.value + (date to progress)
             }
             _downloadProgress.value = _downloadProgress.value - date
         }
