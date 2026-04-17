@@ -314,16 +314,6 @@ private fun TransportControls(
             modifier = Modifier.padding(horizontal = 30.dp)
         ) {
             IconButton(
-                onClick = { onSkip(-30_000) },
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Gold.copy(alpha = 0.15f))
-            ) {
-                Icon(Icons.Filled.Replay30, "Rewind 30s", tint = Gold, modifier = Modifier.size(24.dp))
-            }
-
-            IconButton(
                 onClick = { onSkip(-10_000) },
                 modifier = Modifier
                     .size(48.dp)
@@ -331,6 +321,16 @@ private fun TransportControls(
                     .background(Gold.copy(alpha = 0.15f))
             ) {
                 Icon(Icons.Filled.Replay10, "Rewind 10s", tint = Gold, modifier = Modifier.size(24.dp))
+            }
+
+            IconButton(
+                onClick = { onSkip(-30_000) },
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
+            ) {
+                Icon(Icons.Filled.Replay30, "Rewind 30s", tint = Gold, modifier = Modifier.size(24.dp))
             }
 
             IconButton(
@@ -349,16 +349,6 @@ private fun TransportControls(
             }
 
             IconButton(
-                onClick = { onSkip(10_000) },
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Gold.copy(alpha = 0.15f))
-            ) {
-                Icon(Icons.Filled.Forward10, "Forward 10s", tint = Gold, modifier = Modifier.size(24.dp))
-            }
-
-            IconButton(
                 onClick = { onSkip(30_000) },
                 modifier = Modifier
                     .size(48.dp)
@@ -366,6 +356,16 @@ private fun TransportControls(
                     .background(Gold.copy(alpha = 0.15f))
             ) {
                 Icon(Icons.Filled.Forward30, "Forward 30s", tint = Gold, modifier = Modifier.size(24.dp))
+            }
+
+            IconButton(
+                onClick = { onSkip(10_000) },
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
+            ) {
+                Icon(Icons.Filled.Forward10, "Forward 10s", tint = Gold, modifier = Modifier.size(24.dp))
             }
         }
 

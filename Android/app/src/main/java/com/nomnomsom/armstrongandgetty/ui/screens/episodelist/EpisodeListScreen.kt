@@ -22,11 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.AlertDialog
@@ -152,8 +154,10 @@ fun EpisodeListScreen(
                                 if (isActivePlayback) viewModel.togglePlayPause()
                                 else viewModel.playDay(nowPlayingDay)
                             },
-                            onSkipBack = { viewModel.seekRelative(-30_000) },
-                            onSkipForward = { viewModel.seekRelative(30_000) }
+                            onSkipBack30 = { viewModel.seekRelative(-30_000) },
+                            onSkipBack10 = { viewModel.seekRelative(-10_000) },
+                            onSkipForward10 = { viewModel.seekRelative(10_000) },
+                            onSkipForward30 = { viewModel.seekRelative(30_000) }
                         )
                     } else {
                         NowPlayingPlaceholder()
@@ -256,8 +260,10 @@ private fun NowPlayingCard(
     currentSegmentLabel: String?,
     onTap: () -> Unit,
     onTogglePlay: () -> Unit,
-    onSkipBack: () -> Unit,
-    onSkipForward: () -> Unit
+    onSkipBack30: () -> Unit,
+    onSkipBack10: () -> Unit,
+    onSkipForward10: () -> Unit,
+    onSkipForward30: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -371,22 +377,18 @@ private fun NowPlayingCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isActivePlayback) {
-                    IconButton(
-                        onClick = onSkipBack,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Gold.copy(alpha = 0.12f))
-                    ) {
-                        Icon(
-                            Icons.Filled.Replay30,
-                            contentDescription = "Back 30s",
-                            tint = Gold,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
+                    SkipButton(
+                        icon = Icons.Filled.Replay10,
+                        contentDescription = "Back 10s",
+                        onClick = onSkipBack10
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    SkipButton(
+                        icon = Icons.Filled.Replay30,
+                        contentDescription = "Back 30s",
+                        onClick = onSkipBack30
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
                 }
 
                 IconButton(
@@ -408,25 +410,43 @@ private fun NowPlayingCard(
                 }
 
                 if (isActivePlayback) {
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    IconButton(
-                        onClick = onSkipForward,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Gold.copy(alpha = 0.12f))
-                    ) {
-                        Icon(
-                            Icons.Filled.Forward30,
-                            contentDescription = "Forward 30s",
-                            tint = Gold,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    SkipButton(
+                        icon = Icons.Filled.Forward30,
+                        contentDescription = "Forward 30s",
+                        onClick = onSkipForward30
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    SkipButton(
+                        icon = Icons.Filled.Forward10,
+                        contentDescription = "Forward 10s",
+                        onClick = onSkipForward10
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SkipButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(Gold.copy(alpha = 0.12f))
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = Gold,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -615,15 +635,17 @@ private fun EpisodeDayCard(
                         strokeCap = StrokeCap.Round
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(
@@ -653,7 +675,7 @@ private fun EpisodeDayCard(
                         }
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (day.isListened && !isCurrentlyPlaying) {

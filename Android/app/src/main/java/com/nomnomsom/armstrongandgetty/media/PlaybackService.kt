@@ -27,6 +27,7 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.nomnomsom.armstrongandgetty.R
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
 import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
 import dagger.hilt.android.AndroidEntryPoint
@@ -170,25 +171,52 @@ class PlaybackService : MediaLibraryService() {
             session: MediaSession,
             controllerInfo: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
+            // Samsung's media notification places custom buttons around play/pause in rotation:
+            // index 0 → nearest-left, index 1 → nearest-right, index 2 → far-left, index 3 → far-right.
+            // This ordering lands as [Back10, Back30, play, Fwd30, Fwd10] on-device.
             val customLayout = ImmutableList.of(
-                CommandButton.Builder()
-                    .setDisplayName("Forward 30s")
-                    .setSessionCommand(SessionCommand("FORWARD_30", Bundle.EMPTY))
-                    .setIconResId(android.R.drawable.ic_media_ff)
-                    .build(),
                 CommandButton.Builder()
                     .setDisplayName("Backward 30s")
                     .setSessionCommand(SessionCommand("BACKWARD_30", Bundle.EMPTY))
-                    .setIconResId(android.R.drawable.ic_media_rew)
+                    .setIconResId(R.drawable.ic_replay_30)
+                    .build(),
+                CommandButton.Builder()
+                    .setDisplayName("Forward 30s")
+                    .setSessionCommand(SessionCommand("FORWARD_30", Bundle.EMPTY))
+                    .setIconResId(R.drawable.ic_forward_30)
+                    .build(),
+                CommandButton.Builder()
+                    .setDisplayName("Backward 10s")
+                    .setSessionCommand(SessionCommand("BACKWARD_10", Bundle.EMPTY))
+                    .setIconResId(R.drawable.ic_replay_10)
+                    .build(),
+                CommandButton.Builder()
+                    .setDisplayName("Forward 10s")
+                    .setSessionCommand(SessionCommand("FORWARD_10", Bundle.EMPTY))
+                    .setIconResId(R.drawable.ic_forward_10)
                     .build()
             )
+            // Disable the "skip to next/previous media item" player commands so external controllers
+            // (Bluetooth car decks, Android Auto, the system media notification) fall back to
+            // SEEK_FORWARD / SEEK_BACK, which honour ExoPlayer's 30s increment. In-segment skipping
+            // stays available inside the app via the details screen (it uses seekTo directly).
+            val playerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                .remove(Player.COMMAND_SEEK_TO_NEXT)
+                .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+                .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                .build()
+
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(
                     MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                        .add(SessionCommand("FORWARD_30", Bundle.EMPTY))
                         .add(SessionCommand("BACKWARD_30", Bundle.EMPTY))
+                        .add(SessionCommand("BACKWARD_10", Bundle.EMPTY))
+                        .add(SessionCommand("FORWARD_10", Bundle.EMPTY))
+                        .add(SessionCommand("FORWARD_30", Bundle.EMPTY))
                         .build()
                 )
+                .setAvailablePlayerCommands(playerCommands)
                 .setCustomLayout(customLayout)
                 .build()
         }
@@ -199,15 +227,16 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            when (customCommand.customAction) {
-                "FORWARD_30" -> {
-                    val currentPos = session.player.currentPosition
-                    session.player.seekTo(currentPos + 30_000)
-                }
-                "BACKWARD_30" -> {
-                    val currentPos = session.player.currentPosition
-                    session.player.seekTo((currentPos - 30_000).coerceAtLeast(0))
-                }
+            val deltaMs = when (customCommand.customAction) {
+                "BACKWARD_30" -> -30_000L
+                "BACKWARD_10" -> -10_000L
+                "FORWARD_10" -> 10_000L
+                "FORWARD_30" -> 30_000L
+                else -> null
+            }
+            if (deltaMs != null) {
+                val newPos = (session.player.currentPosition + deltaMs).coerceAtLeast(0)
+                session.player.seekTo(newPos)
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
