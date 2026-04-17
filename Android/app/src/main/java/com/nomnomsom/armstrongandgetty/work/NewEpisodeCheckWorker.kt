@@ -100,8 +100,12 @@ class NewEpisodeCheckWorker @AssistedInject constructor(
                 val hasNewSegments = previousCount != null && day.segmentCount > previousCount
 
                 if (isNew) {
-                    Log.d(TAG, "Auto-downloading new episode: ${day.date}")
-                    repository.downloadDay(day.date)
+                    if (repository.isUserDeleted(day.date)) {
+                        Log.d(TAG, "Skipping auto-download for ${day.date} — user previously deleted")
+                    } else {
+                        Log.d(TAG, "Auto-downloading new episode: ${day.date}")
+                        repository.downloadDay(day.date)
+                    }
                 } else if (hasNewSegments && day.state == DownloadState.DOWNLOADED) {
                     Log.d(TAG, "Auto-downloading new segments for: ${day.date}")
                     repository.appendNewSegments(day.date)

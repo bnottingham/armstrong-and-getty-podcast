@@ -25,8 +25,10 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +58,7 @@ import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.theme.DarkBg
+import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
 import com.nomnomsom.armstrongandgetty.ui.theme.LiveRed
 import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
@@ -63,13 +66,22 @@ import com.nomnomsom.armstrongandgetty.ui.theme.TextSecondary
 import com.nomnomsom.armstrongandgetty.util.formatDuration
 import kotlinx.coroutines.delay
 
+private enum class SegmentDownloadStatus { DOWNLOADED, DOWNLOADING, MISSING }
+
 @Composable
 fun PlayerScreen(
     day: PodcastDay,
     viewModel: EpisodeListViewModel
 ) {
     val playbackState by viewModel.playbackState.collectAsState()
+    val downloadProgressMap by viewModel.downloadProgress.collectAsState()
     val segments = remember(day.segmentsJson) { viewModel.getSegmentsForDay(day) }
+
+    val dayProgress = downloadProgressMap[day.date]
+    val missingIndices = remember(day.date, day.segmentCount, dayProgress) {
+        viewModel.missingSegmentIndices(day)
+    }
+    val inFlightIndices = dayProgress?.segmentsInProgress ?: emptySet()
 
     // Load the playlist without auto-playing, so the user can resume manually.
     LaunchedEffect(day.date) {
@@ -213,17 +225,25 @@ fun PlayerScreen(
                     mutableStateOf(false)
                 }
 
+                val status = when {
+                    index in inFlightIndices -> SegmentDownloadStatus.DOWNLOADING
+                    index in missingIndices -> SegmentDownloadStatus.MISSING
+                    else -> SegmentDownloadStatus.DOWNLOADED
+                }
+
                 SegmentRow(
                     segment = segment,
                     isActive = index == currentSegmentIndex,
                     expanded = expanded,
+                    status = status,
                     onToggleExpand = { expanded = !expanded },
                     onPlay = {
                         viewModel.seekToSegment(index)
                         if (!playbackState.isPlaying) {
                             viewModel.togglePlayPause()
                         }
-                    }
+                    },
+                    onRetry = { viewModel.retrySegment(day.date, index) }
                 )
             }
 
@@ -371,8 +391,10 @@ private fun SegmentRow(
     segment: Segment,
     isActive: Boolean,
     expanded: Boolean,
+    status: SegmentDownloadStatus,
     onToggleExpand: () -> Unit,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onRetry: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -415,36 +437,31 @@ private fun SegmentRow(
                         fontSize = 13.sp
                     )
                 )
-                val displayDurationMin = if (segment.actualDurationMs > 0) {
-                    segment.actualDurationMs / 60_000
-                } else {
-                    segment.durationMs / 60_000
+                val subtitle = when (status) {
+                    SegmentDownloadStatus.DOWNLOADING -> "Downloading…"
+                    SegmentDownloadStatus.MISSING -> "Not downloaded — tap retry"
+                    SegmentDownloadStatus.DOWNLOADED -> {
+                        val mins = (segment.actualDurationMs.takeIf { it > 0 } ?: segment.durationMs) / 60_000
+                        "$mins min"
+                    }
+                }
+                val subtitleColor = when (status) {
+                    SegmentDownloadStatus.MISSING -> ErrorRed
+                    SegmentDownloadStatus.DOWNLOADING -> Gold
+                    SegmentDownloadStatus.DOWNLOADED -> TextMuted
                 }
                 Text(
-                    text = "${displayDurationMin} min",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.sp,
-                        color = TextMuted
+                        color = subtitleColor
                     )
                 )
             }
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            IconButton(
-                onClick = onPlay,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Gold.copy(alpha = 0.15f))
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "Play segment",
-                    tint = Gold,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            SegmentActionIcon(status = status, onPlay = onPlay, onRetry = onRetry)
 
             Spacer(modifier = Modifier.width(4.dp))
 
@@ -473,6 +490,60 @@ private fun SegmentRow(
                     .fillMaxWidth()
                     .padding(start = 60.dp, end = 16.dp, bottom = 14.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun SegmentActionIcon(
+    status: SegmentDownloadStatus,
+    onPlay: () -> Unit,
+    onRetry: () -> Unit
+) {
+    when (status) {
+        SegmentDownloadStatus.DOWNLOADED -> {
+            IconButton(
+                onClick = onPlay,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Play segment",
+                    tint = Gold,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        SegmentDownloadStatus.DOWNLOADING -> {
+            Box(
+                modifier = Modifier.size(40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Gold,
+                    strokeWidth = 2.dp
+                )
+            }
+        }
+        SegmentDownloadStatus.MISSING -> {
+            IconButton(
+                onClick = onRetry,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(ErrorRed.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Retry download",
+                    tint = ErrorRed,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

@@ -1,21 +1,20 @@
 package com.nomnomsom.armstrongandgetty.data.model
 
 /**
- * Per-segment byte-level progress for an in-flight download.
+ * Aggregate progress across a day's parallel segment downloads.
  *
- * Shared across the data layer (emitted by `AudioDownloader`) and the UI layer
- * (consumed by `EpisodeListViewModel` / `EpisodeListScreen`). Lives in
- * `data/model/` so both layers depend on a single canonical shape instead of
- * re-packing the same fields at the seam.
- *
- * @param currentSegment 0-based index of the segment currently downloading.
- * @param totalSegments total number of segments for the day being downloaded.
- * @param segmentBytesDownloaded bytes downloaded so far for the current segment.
- * @param segmentTotalBytes total bytes for the current segment (-1 if unknown).
+ * @param totalSegments number of segments being downloaded (or retried) for the day.
+ * @param segmentsInProgress 0-based indices currently streaming.
+ * @param segmentsCompleted count that finished successfully (file on disk).
+ * @param segmentsFailed 0-based indices that errored out on this pass; the user can retry them individually.
+ * @param bytesDownloaded running total across all segments on this pass.
+ * @param totalBytes sum of Content-Length across segments, or -1 if any segment didn't advertise one.
  */
 data class DownloadProgress(
-    val currentSegment: Int,
     val totalSegments: Int,
-    val segmentBytesDownloaded: Long,
-    val segmentTotalBytes: Long
+    val segmentsInProgress: Set<Int> = emptySet(),
+    val segmentsCompleted: Int = 0,
+    val segmentsFailed: Set<Int> = emptySet(),
+    val bytesDownloaded: Long = 0L,
+    val totalBytes: Long = -1L
 )

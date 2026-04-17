@@ -23,14 +23,13 @@ class XFeedParser @Inject constructor(
 
     suspend fun fetchFeed(): Result<List<XFeedItem>> = withContext(Dispatchers.IO) {
         try {
-            val response = okHttpClient.newCall(appGetRequest(FEED_URL)).execute()
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("HTTP ${response.code}"))
+            okHttpClient.newCall(appGetRequest(FEED_URL)).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: ""
+                Result.success(parseRss(body))
             }
-
-            val body = response.body?.string() ?: ""
-            val items = parseRss(body)
-            Result.success(items)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -182,7 +182,11 @@ fun EpisodeListScreen(
                         },
                         onDownload = { viewModel.downloadDay(day.date) },
                         onReset = { viewModel.resetProgress(day.date) },
-                        onDelete = { viewModel.deleteDay(day.date) }
+                        onDelete = { viewModel.deleteDay(day.date) },
+                        onTogglePlay = {
+                            if (isThisDayPlaying) viewModel.togglePlayPause()
+                            else viewModel.playDay(day)
+                        }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -481,7 +485,8 @@ private fun EpisodeDayCard(
     onClick: () -> Unit,
     onDownload: () -> Unit,
     onReset: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onTogglePlay: () -> Unit
 ) {
     val downloadState = day.state
     val isDownloaded = downloadState == DownloadState.DOWNLOADED
@@ -617,17 +622,40 @@ private fun EpisodeDayCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = when {
-                                day.isListened && !isCurrentlyPlaying -> "Completed"
-                                displayPositionMs > 0 ->
-                                    "${displayPositionMs.formatDuration()} / ${displayDurationMs.formatDuration()}"
-                                else -> "Ready to play"
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = onTogglePlay,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Gold.copy(alpha = 0.15f))
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause episode" else "Play episode",
+                                    tint = Gold,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = when {
+                                    day.isListened && !isCurrentlyPlaying -> "Completed"
+                                    displayPositionMs > 0 ->
+                                        "${displayPositionMs.formatDuration()} / ${displayDurationMs.formatDuration()}"
+                                    else -> "Ready to play"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             if (day.isListened && !isCurrentlyPlaying) {
                                 OutlinedButton(
                                     onClick = onReset,
@@ -641,33 +669,34 @@ private fun EpisodeDayCard(
                                 }
                             }
 
-                            if (!isCurrentlyPlaying) {
-                                IconButton(
-                                    onClick = { showDeleteDialog = true },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Delete,
-                                        contentDescription = "Delete episode",
-                                        tint = TextMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                            IconButton(
+                                onClick = { showDeleteDialog = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Delete episode",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
                     }
                 }
 
                 DownloadState.DOWNLOADING -> {
-                    val segNum = (downloadProgress?.currentSegment ?: 0) + 1
-                    val segTotal = downloadProgress?.totalSegments ?: day.segmentCount
-                    val segFraction = if (downloadProgress != null && downloadProgress.segmentTotalBytes > 0) {
-                        downloadProgress.segmentBytesDownloaded.toFloat() / downloadProgress.segmentTotalBytes
-                    } else 0f
-                    val overallProgress = if (segTotal > 0) {
-                        ((segNum - 1) + segFraction) / segTotal
-                    } else 0f
-                    val segPercent = (segFraction * 100).toInt()
+                    val total = downloadProgress?.totalSegments ?: day.segmentCount
+                    val completed = downloadProgress?.segmentsCompleted ?: 0
+                    val currentIndex = downloadProgress?.segmentsInProgress?.firstOrNull() ?: completed
+                    val failed = downloadProgress?.segmentsFailed?.size ?: 0
+
+                    val overallProgress = when {
+                        downloadProgress != null && downloadProgress.totalBytes > 0 ->
+                            downloadProgress.bytesDownloaded.toFloat() / downloadProgress.totalBytes
+                        total > 0 -> completed.toFloat() / total
+                        else -> 0f
+                    }
+                    val overallPercent = (overallProgress * 100).toInt().coerceIn(0, 100)
 
                     LinearProgressIndicator(
                         progress = { overallProgress.coerceIn(0f, 1f) },
@@ -681,7 +710,10 @@ private fun EpisodeDayCard(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Downloading segment $segNum of $segTotal — $segPercent%",
+                        text = buildString {
+                            append("Downloading segment ${currentIndex + 1} of $total — $overallPercent%")
+                            if (failed > 0) append(" · $failed failed")
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

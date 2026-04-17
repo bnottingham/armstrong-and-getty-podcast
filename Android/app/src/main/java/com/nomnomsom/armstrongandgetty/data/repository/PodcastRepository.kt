@@ -1,8 +1,10 @@
 package com.nomnomsom.armstrongandgetty.data.repository
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
+import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.RssItem
@@ -11,8 +13,8 @@ import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
-import com.nomnomsom.armstrongandgetty.data.remote.DownloadResult
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
+import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
 import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
@@ -28,8 +30,22 @@ class PodcastRepository @Inject constructor(
     private val dao: PodcastDayDao,
     private val rssFeedParser: RssFeedParser,
     private val audioDownloader: AudioDownloader,
+    private val deletionTracker: UserDeletionTracker,
     private val gson: Gson
 ) {
+    companion object {
+        private const val TAG = "PodcastRepository"
+    }
+
+    // Guards against the worker + viewmodel both firing `downloadDay` for the same date on launch.
+    // Without this, two parallel download loops race on the same files and the progress tracker.
+    private val activeDownloadsLock = Any()
+    private val activeDownloads = mutableSetOf<String>()
+
+    fun isUserDeleted(date: String): Boolean = deletionTracker.isDeleted(date)
+
+    fun clearUserDeletion(date: String) = deletionTracker.unmarkDeleted(date)
+
     fun observeAllDays(): Flow<List<PodcastDay>> = dao.getAllDays()
 
     suspend fun getAllDaysSnapshot(): List<PodcastDay> = dao.getAllDaysSnapshot()
@@ -113,38 +129,30 @@ class PodcastRepository @Inject constructor(
         date: String,
         onProgress: DownloadProgressCallback? = null
     ): Result<String> {
-        val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
-        val segments = parseSegments(day.segmentsJson)
-        if (segments.isEmpty()) return Result.failure(Exception("No segments"))
-
-        val existingOnDisk = audioDownloader.countExistingSegments(date, segments.size)
-
-        if (existingOnDisk == segments.size) {
-            dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
+        val claimed = synchronized(activeDownloadsLock) {
+            if (date in activeDownloads) false else activeDownloads.add(date)
+        }
+        if (!claimed) {
+            Log.d(TAG, "downloadDay $date skipped: another call is already downloading this date")
             return Result.success(date)
         }
 
-        dao.updateDownloadState(date, DownloadState.DOWNLOADING.value)
+        try {
+            val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
+            val segments = parseSegments(day.segmentsJson)
+            if (segments.isEmpty()) return Result.failure(Exception("No segments"))
 
-        val downloadResult = audioDownloader.downloadSegments(
-            date = date,
-            segments = segments,
-            existingSegmentCount = existingOnDisk,
-            onProgress = onProgress
-        )
+            if (audioDownloader.hasAllSegments(date, segments.size)) {
+                dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
+                return Result.success(date)
+            }
 
-        return if (downloadResult.isSuccess) {
-            persistDownloadedSegments(
-                date = date,
-                baseSegments = segments,
-                dlResult = downloadResult.getOrThrow(),
-                summary = day.summary,
-                isComplete = day.isComplete
-            )
-            Result.success(date)
-        } else {
-            dao.updateDownloadState(date, DownloadState.ERROR.value)
-            Result.failure(downloadResult.exceptionOrNull() ?: Exception("Download failed"))
+            dao.updateDownloadState(date, DownloadState.DOWNLOADING.value)
+
+            val outcomes = audioDownloader.downloadSegments(date, segments, onProgress)
+            return finalizeDownload(date, segments, outcomes, day.summary, day.isComplete)
+        } finally {
+            synchronized(activeDownloadsLock) { activeDownloads.remove(date) }
         }
     }
 
@@ -166,40 +174,77 @@ class PodcastRepository @Inject constructor(
             return Result.success(date)
         }
 
-        val existingOnDisk = audioDownloader.countExistingSegments(date, updatedSegments.size)
+        val outcomes = audioDownloader.downloadSegments(date, updatedSegments)
+        return finalizeDownload(date, updatedSegments, outcomes, updatedDay.summary, updatedDay.isComplete)
+    }
 
-        val result = audioDownloader.downloadSegments(
+    suspend fun retrySegment(
+        date: String,
+        index: Int,
+        onProgress: DownloadProgressCallback? = null
+    ): Result<String> {
+        val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
+        val segments = parseSegments(day.segmentsJson)
+        val segment = segments.getOrNull(index)
+            ?: return Result.failure(Exception("Segment $index out of range"))
+
+        val outcome = audioDownloader.downloadSingleSegment(
             date = date,
-            segments = updatedSegments,
-            existingSegmentCount = existingOnDisk
+            segment = segment,
+            index = index,
+            totalSegments = segments.size,
+            onProgress = onProgress
         )
 
-        return if (result.isSuccess) {
-            persistDownloadedSegments(
-                date = date,
-                baseSegments = updatedSegments,
-                dlResult = result.getOrThrow(),
-                summary = updatedDay.summary,
-                isComplete = updatedDay.isComplete
-            )
-            Result.success(date)
-        } else {
-            Result.failure(result.exceptionOrNull() ?: Exception("Download failed"))
+        return when (outcome) {
+            is SegmentDownloadOutcome.Success -> {
+                val merged = segments.toMutableList().apply {
+                    this[index] = this[index].copy(actualDurationMs = outcome.actualDurationMs)
+                }
+                persistMergedSegments(date, merged, day.summary, day.isComplete)
+                if (audioDownloader.hasAllSegments(date, merged.size) && day.state != DownloadState.DOWNLOADED) {
+                    dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
+                }
+                Result.success(date)
+            }
+            is SegmentDownloadOutcome.Failure -> Result.failure(outcome.error)
         }
     }
 
-    private suspend fun persistDownloadedSegments(
+    private suspend fun finalizeDownload(
         date: String,
-        baseSegments: List<Segment>,
-        dlResult: DownloadResult,
+        segments: List<Segment>,
+        outcomes: List<SegmentDownloadOutcome>,
+        summary: String,
+        isComplete: Boolean
+    ): Result<String> {
+        val successDurations = outcomes.filterIsInstance<SegmentDownloadOutcome.Success>()
+            .associate { it.index to it.actualDurationMs }
+
+        val merged = segments.mapIndexed { index, seg ->
+            val actualDur = successDurations[index] ?: 0L
+            if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
+        }
+
+        persistMergedSegments(date, merged, summary, isComplete)
+
+        val anyOnDisk = audioDownloader.missingSegmentIndices(date, merged.size).size < merged.size
+        return if (anyOnDisk) {
+            dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
+            Result.success(date)
+        } else {
+            dao.updateDownloadState(date, DownloadState.ERROR.value)
+            val firstFailure = outcomes.filterIsInstance<SegmentDownloadOutcome.Failure>().firstOrNull()
+            Result.failure(firstFailure?.error ?: Exception("Download failed"))
+        }
+    }
+
+    private suspend fun persistMergedSegments(
+        date: String,
+        merged: List<Segment>,
         summary: String,
         isComplete: Boolean
     ) {
-        val merged = baseSegments.mapIndexed { index, seg ->
-            val actualDur = dlResult.segmentActualDurationsMs.getOrElse(index) { 0L }
-            if (actualDur > 0) seg.copy(actualDurationMs = actualDur) else seg
-        }
-        dao.updateDownloadComplete(date, DownloadState.DOWNLOADED.value, date)
         dao.updateSegments(
             date = date,
             segmentsJson = gson.toJson(merged),
@@ -219,6 +264,10 @@ class PodcastRepository @Inject constructor(
         return audioDownloader.hasAllSegments(date, segmentCount)
     }
 
+    fun missingSegmentIndices(date: String, segmentCount: Int): Set<Int> {
+        return audioDownloader.missingSegmentIndices(date, segmentCount)
+    }
+
     suspend fun updateListenProgress(date: String, positionMs: Long, isListened: Boolean) {
         dao.updateListenProgress(date, positionMs, isListened)
     }
@@ -227,9 +276,17 @@ class PodcastRepository @Inject constructor(
         dao.resetProgress(date)
     }
 
+    /**
+     * "Delete" means: remove local audio, reset listen progress, and flip state back to NONE so the
+     * card re-offers a Download button. Row stays in the list. [deletionTracker] is marked so the
+     * worker/refreshFeed don't silently re-download the day before the user asks for it.
+     */
     suspend fun deleteDay(date: String) {
+        Log.d(TAG, "deleteDay $date — files removed, state reset to NONE")
         audioDownloader.deleteSegmentFiles(date)
-        dao.deleteDay(date)
+        dao.resetProgress(date)
+        dao.updateDownloadState(date, DownloadState.NONE.value)
+        deletionTracker.markDeleted(date)
     }
 
     fun parseSegments(json: String): List<Segment> {

@@ -200,6 +200,21 @@ class PlaybackController @Inject constructor(
         if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
     }
 
+    /**
+     * Stop playback, drop the current playlist, and reset this controller's per-day state.
+     * Used when the user deletes the currently-playing episode — after this, [playbackState]
+     * reports no active day so the "Now Playing" UI disappears.
+     */
+    fun stopAndClear() {
+        val ctrl = controller ?: return
+        ctrl.stop()
+        ctrl.clearMediaItems()
+        currentDayDate = null
+        segmentDurations = emptyList()
+        segmentStartMs = emptyList()
+        updateState()
+    }
+
     fun seekTo(virtualPositionMs: Long) {
         val ctrl = controller ?: return
         val (segIndex, posInSeg) = virtualPosToSegmentPos(virtualPositionMs)

@@ -66,18 +66,18 @@ class EpisodeListViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
 
                 val latestDay = repository.getDayByDate(latestDate)
-                if (latestDay != null) {
+                if (latestDay != null && !repository.isUserDeleted(latestDate)) {
                     when (latestDay.state) {
-                        DownloadState.NONE -> downloadDay(latestDate)
+                        DownloadState.NONE -> autoDownload(latestDate)
                         DownloadState.DOWNLOADED -> {
                             val segments = repository.parseSegments(latestDay.segmentsJson)
                             when {
                                 !latestDay.isComplete -> checkForNewSegments(latestDate)
                                 // A complete day can still be missing files if OMT was added after initial download.
-                                !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> downloadDay(latestDate)
+                                !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> autoDownload(latestDate)
                             }
                         }
-                        DownloadState.ERROR -> downloadDay(latestDate)
+                        DownloadState.ERROR -> autoDownload(latestDate)
                         DownloadState.DOWNLOADING -> Unit
                     }
                 }
@@ -90,14 +90,43 @@ class EpisodeListViewModel @Inject constructor(
         }
     }
 
+    /** Manual download (user tapped the download button). Clears any prior user deletion. */
     fun downloadDay(date: String) {
         viewModelScope.launch {
-            repository.downloadDay(date) { progress ->
-                _downloadProgress.value = _downloadProgress.value + (date to progress)
-            }
-            _downloadProgress.value = _downloadProgress.value - date
+            repository.clearUserDeletion(date)
+            performDownload(date)
         }
     }
+
+    private fun autoDownload(date: String) {
+        viewModelScope.launch { performDownload(date) }
+    }
+
+    private suspend fun performDownload(date: String) {
+        repository.downloadDay(date) { progress ->
+            _downloadProgress.value = _downloadProgress.value + (date to progress)
+        }
+        _downloadProgress.value = _downloadProgress.value - date
+    }
+
+    fun retrySegment(date: String, index: Int) {
+        viewModelScope.launch {
+            val result = repository.retrySegment(date, index) { progress ->
+                _downloadProgress.value = _downloadProgress.value + (date to progress)
+            }
+            if (result.isFailure) {
+                Log.w(TAG, "Segment $index retry failed for $date: ${result.exceptionOrNull()?.message}")
+            }
+            // Clear in-flight state for this retry; the row will refresh from disk check.
+            val current = _downloadProgress.value[date]
+            if (current != null && current.segmentsInProgress.isEmpty() && current.segmentsFailed.isEmpty()) {
+                _downloadProgress.value = _downloadProgress.value - date
+            }
+        }
+    }
+
+    fun missingSegmentIndices(day: PodcastDay): Set<Int> =
+        repository.missingSegmentIndices(day.date, day.segmentCount)
 
     fun resetProgress(date: String) {
         viewModelScope.launch {
@@ -108,9 +137,11 @@ class EpisodeListViewModel @Inject constructor(
     fun deleteDay(date: String) {
         viewModelScope.launch {
             if (playbackState.value.currentDayDate == date) {
-                playbackController.pause()
+                playbackController.stopAndClear()
             }
             repository.deleteDay(date)
+            _downloadProgress.value = _downloadProgress.value - date
+            Log.d(TAG, "deleteDay $date complete — state reset to NONE")
         }
     }
 

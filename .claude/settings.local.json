@@ -19,7 +19,14 @@
       "Bash(git rm *)",
       "Bash(git -c commit.gpgsign=false commit -m \"Replace python-transcription with python-twitter; gitignore browser_data\")",
       "Bash(./gradlew :app:compileDebugKotlin)",
-      "Bash(git worktree *)"
+      "Bash(git worktree *)",
+      "Bash(./gradlew :app:assembleDebug)",
+      "Bash(curl -s -A \"ArmstrongGettyPodcast/1.0\" \"https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/4db37684-c7ed-4964-843c-ae3900375fd7/podcast.rss\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -v -L -A \"ArmstrongGettyPodcast/1.0\" -o /dev/null -r 0-131071 --max-time 60 \"https://podtrac.com/pts/redirect.mp3/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/06b6b2f0-6a7f-4476-9292-b42e00ebaf7d/audio.mp3?utm_source=Podcast&in_playlist=4db37684-c7ed-4964-843c-ae3900375fd7\")",
+      "Bash(time curl *)",
+      "Bash(curl -sIL -A \"ArmstrongGettyPodcast/1.0\" --max-time 30 \"https://podtrac.com/pts/redirect.mp3/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/06b6b2f0-6a7f-4476-9292-b42e00ebaf7d/audio.mp3?utm_source=Podcast&in_playlist=4db37684-c7ed-4964-843c-ae3900375fd7\")",
+      "Bash(wait)"
     ]
   }
 }
