@@ -18,12 +18,15 @@ import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
 import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 @Singleton
 class PodcastRepository @Inject constructor(
@@ -137,10 +140,17 @@ class PodcastRepository @Inject constructor(
             return Result.success(date)
         }
 
+        var segmentsForCleanup: List<Segment> = emptyList()
+        var summaryForCleanup = ""
+        var isCompleteForCleanup = false
+
         try {
             val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
             val segments = parseSegments(day.segmentsJson)
             if (segments.isEmpty()) return Result.failure(Exception("No segments"))
+            segmentsForCleanup = segments
+            summaryForCleanup = day.summary
+            isCompleteForCleanup = day.isComplete
 
             if (audioDownloader.hasAllSegments(date, segments.size)) {
                 dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
@@ -151,9 +161,59 @@ class PodcastRepository @Inject constructor(
 
             val outcomes = audioDownloader.downloadSegments(date, segments, onProgress)
             return finalizeDownload(date, segments, outcomes, day.summary, day.isComplete)
+        } catch (e: CancellationException) {
+            // The viewModelScope job was cancelled (user hit Cancel, or screen was torn down).
+            // Without this NonCancellable cleanup the row would be left at DOWNLOADING forever.
+            withContext(NonCancellable) {
+                finalizeFromDisk(date, segmentsForCleanup, summaryForCleanup, isCompleteForCleanup)
+            }
+            throw e
         } finally {
             synchronized(activeDownloadsLock) { activeDownloads.remove(date) }
         }
+    }
+
+    /** Cancel the in-progress download for [date]. The active OkHttp call is interrupted; the
+     *  caller's coroutine still owns the Job and is responsible for cancelling it if desired. */
+    fun cancelDownload(date: String) {
+        audioDownloader.cancelDay(date)
+    }
+
+    /** Cancel a single in-flight segment. The retry loop continues to the next segment. */
+    fun cancelSegment(date: String, index: Int) {
+        audioDownloader.cancelSegment(date, index)
+    }
+
+    /**
+     * Recover from a previous run that was killed mid-download (process crash, force-close, OOM).
+     * Anything left in DOWNLOADING is by definition stale by the time we boot — flip it so the UI
+     * surfaces a retry path instead of staying frozen at "Downloading segment 1 of 4 — 0%".
+     */
+    suspend fun resetStaleDownloadingStates() {
+        dao.replaceDownloadState(DownloadState.DOWNLOADING.value, DownloadState.ERROR.value)
+        Log.d(TAG, "resetStaleDownloadingStates: any DOWNLOADING rows reset to ERROR")
+    }
+
+    private suspend fun finalizeFromDisk(
+        date: String,
+        segments: List<Segment>,
+        summary: String,
+        isComplete: Boolean
+    ) {
+        if (segments.isEmpty()) {
+            dao.updateDownloadState(date, DownloadState.ERROR.value)
+            return
+        }
+        // Treat each on-disk file as a "success" so we keep the actual durations consistent.
+        val outcomes = segments.indices.map { i ->
+            val file = java.io.File(audioDownloader.getSegmentFiles(date, segments.size)[i])
+            if (file.exists() && file.length() > 0) {
+                SegmentDownloadOutcome.Success(i, file.absolutePath, 0L)
+            } else {
+                SegmentDownloadOutcome.Failure(i, Exception("not on disk"))
+            }
+        }
+        finalizeDownload(date, segments, outcomes, summary, isComplete)
     }
 
     suspend fun appendNewSegments(date: String): Result<String> {
@@ -202,7 +262,9 @@ class PodcastRepository @Inject constructor(
                     this[index] = this[index].copy(actualDurationMs = outcome.actualDurationMs)
                 }
                 persistMergedSegments(date, merged, day.summary, day.isComplete)
-                if (audioDownloader.hasAllSegments(date, merged.size) && day.state != DownloadState.DOWNLOADED) {
+                // Any-on-disk = playable. Matches finalizeDownload: a partial download is still
+                // DOWNLOADED — preparePlaylist filters out the missing files at playback time.
+                if (day.state != DownloadState.DOWNLOADED) {
                     dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
                 }
                 Result.success(date)

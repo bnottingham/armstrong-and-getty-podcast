@@ -28,6 +28,9 @@ interface PodcastDayDao {
     @Query("UPDATE podcast_days SET downloadState = :state WHERE date = :date")
     suspend fun updateDownloadState(date: String, state: String)
 
+    @Query("UPDATE podcast_days SET downloadState = :newState WHERE downloadState = :oldState")
+    suspend fun replaceDownloadState(oldState: String, newState: String)
+
     @Query("UPDATE podcast_days SET downloadState = :state, combinedFilePath = :path WHERE date = :date")
     suspend fun updateDownloadComplete(date: String, state: String, path: String)
 

@@ -14,6 +14,7 @@ import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +46,9 @@ class EpisodeListViewModel @Inject constructor(
 
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
+
+    // One Job per in-flight day download so the user can cancel from the UI.
+    private val downloadJobs = mutableMapOf<String, Job>()
 
     init {
         viewModelScope.launch {
@@ -92,21 +96,44 @@ class EpisodeListViewModel @Inject constructor(
 
     /** Manual download (user tapped the download button). Clears any prior user deletion. */
     fun downloadDay(date: String) {
-        viewModelScope.launch {
+        launchDownload(date) {
             repository.clearUserDeletion(date)
             performDownload(date)
         }
     }
 
     private fun autoDownload(date: String) {
-        viewModelScope.launch { performDownload(date) }
+        launchDownload(date) { performDownload(date) }
+    }
+
+    private fun launchDownload(date: String, block: suspend () -> Unit) {
+        // If a download for this date is already running, leave it alone — we don't want a second
+        // launch to clobber the progress callback or race on segment files.
+        if (downloadJobs[date]?.isActive == true) return
+        val job = viewModelScope.launch { block() }
+        downloadJobs[date] = job
+        job.invokeOnCompletion { downloadJobs.remove(date) }
     }
 
     private suspend fun performDownload(date: String) {
-        repository.downloadDay(date) { progress ->
-            _downloadProgress.value = _downloadProgress.value + (date to progress)
+        try {
+            repository.downloadDay(date) { progress ->
+                _downloadProgress.value = _downloadProgress.value + (date to progress)
+            }
+        } finally {
+            _downloadProgress.value = _downloadProgress.value - date
         }
-        _downloadProgress.value = _downloadProgress.value - date
+    }
+
+    /** Cancel an in-flight day download. Whatever segments finished stay on disk. */
+    fun cancelDownload(date: String) {
+        repository.cancelDownload(date)
+        downloadJobs[date]?.cancel()
+    }
+
+    /** Cancel a single in-flight segment without killing the rest of the download. */
+    fun cancelSegment(date: String, index: Int) {
+        repository.cancelSegment(date, index)
     }
 
     fun retrySegment(date: String, index: Int) {
@@ -165,13 +192,19 @@ class EpisodeListViewModel @Inject constructor(
         startPositionMs: Long,
         autoPlay: Boolean
     ): Boolean {
-        if (day.state != DownloadState.DOWNLOADED) return false
-
+        // No state gate — a partial download (state can be DOWNLOADING / ERROR / NONE if the user
+        // retried individual segments) is still playable as long as some segment files exist.
+        // Files that are mid-write or missing are filtered below.
         val segments = repository.parseSegments(day.segmentsJson)
+        if (segments.isEmpty()) return false
         val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
 
-        // OMT may be added after the rest of the day is already downloaded — skip missing files.
-        val paired = segments.zip(allFilePaths).filter { (_, path) -> java.io.File(path).exists() }
+        val inFlight = _downloadProgress.value[day.date]?.segmentsInProgress ?: emptySet()
+        val paired = segments.zip(allFilePaths).filterIndexed { index, (_, path) ->
+            // Currently-downloading files have non-zero size but partial bytes — exclude them so
+            // we don't hand ExoPlayer a half-written mp3.
+            index !in inFlight && java.io.File(path).exists() && java.io.File(path).length() > 0
+        }
         if (paired.isEmpty()) return false
         val (playableSegments, filePaths) = paired.unzip()
 

@@ -10,12 +10,19 @@ import com.nomnomsom.armstrongandgetty.util.appGetRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,7 +50,11 @@ class AudioDownloader @Inject constructor(
     companion object {
         private const val TAG = "AudioDownloader"
         private const val PER_ATTEMPT_READ_TIMEOUT_SECONDS = 30L
-        // No call timeout — readTimeout is the stall detector. A hard call cap would kill big downloads on slow networks.
+        // OkHttp's readTimeout only fires inside a single read() call. The stall watchdog below
+        // catches the case where reads keep returning a trickle of bytes (or none) without OkHttp
+        // raising a timeout. STALL_TIMEOUT_MS is a no-progress budget across the whole attempt.
+        private const val STALL_TIMEOUT_MS = 45_000L
+        private const val STALL_CHECK_INTERVAL_MS = 5_000L
         private const val MAX_ATTEMPTS_PER_SEGMENT = 3
         private const val RETRY_BACKOFF_MS = 1000L
 
@@ -54,6 +65,14 @@ class AudioDownloader @Inject constructor(
         // Coalesce in-segment byte updates to ~10/sec so we don't flood the main thread.
         private const val PROGRESS_EMIT_INTERVAL_MS = 100L
     }
+
+    // Tracks the active OkHttp Call for each in-flight (date, segmentIndex) so cancellation from
+    // outside can interrupt the blocking IO. Sequential downloads mean at most one entry per date,
+    // but we still key by index so per-segment retries (which run on top of an unrelated active
+    // download from the worker) don't stomp each other.
+    private val callsLock = Any()
+    private val activeCalls = HashMap<Pair<String, Int>, Call>()
+    private val cancelledSegments = HashSet<Pair<String, Int>>()
 
     private val podcastDir: File
         get() = File(context.filesDir, "podcasts").also { it.mkdirs() }
@@ -104,6 +123,39 @@ class AudioDownloader @Inject constructor(
         return seconds * ESTIMATED_BYTES_PER_SECOND
     }
 
+    /**
+     * Cancel the currently-active OkHttp Call for one segment. Safe to call when no call is in
+     * flight — it just records the intent so the next attempt aborts before starting. The
+     * cancellation flag clears on the next [downloadWithRetry] entry for that segment.
+     */
+    fun cancelSegment(date: String, index: Int) {
+        val callToCancel: Call? = synchronized(callsLock) {
+            cancelledSegments.add(date to index)
+            activeCalls[date to index]
+        }
+        callToCancel?.cancel()
+        Log.d(TAG, "cancelSegment $date#$index (call active=${callToCancel != null})")
+    }
+
+    /** Cancel every active segment for a date. Sequential downloads mean usually one. */
+    fun cancelDay(date: String) {
+        val toCancel: List<Call> = synchronized(callsLock) {
+            val keys = activeCalls.keys.filter { it.first == date }
+            keys.forEach { cancelledSegments.add(it) }
+            keys.mapNotNull { activeCalls[it] }
+        }
+        toCancel.forEach { it.cancel() }
+        Log.d(TAG, "cancelDay $date (canceled ${toCancel.size} active call(s))")
+    }
+
+    private fun isCancelled(date: String, index: Int): Boolean = synchronized(callsLock) {
+        date to index in cancelledSegments
+    }
+
+    private fun clearCancelled(date: String, index: Int) = synchronized(callsLock) {
+        cancelledSegments.remove(date to index)
+    }
+
     private suspend fun downloadWithRetry(
         date: String,
         segment: Segment,
@@ -118,13 +170,22 @@ class AudioDownloader @Inject constructor(
             return SegmentDownloadOutcome.Success(index, destFile.absolutePath, duration)
         }
 
+        // Fresh entry into this segment's retry loop — drop any stale cancel-intent left over from
+        // a prior aborted attempt so a brand-new call isn't poisoned.
+        clearCancelled(date, index)
+
         tracker.markStarted(index)
         Log.d(TAG, "seg $index start: ${segment.audioUrl}")
 
         var lastError: Throwable? = null
         repeat(MAX_ATTEMPTS_PER_SEGMENT) { attempt ->
+            if (isCancelled(date, index)) {
+                Log.i(TAG, "seg $index cancelled by user before attempt ${attempt + 1}")
+                lastError = CancelledByUserException()
+                return@repeat
+            }
             try {
-                val written = downloadFile(segment.audioUrl, destFile) { bytesDelta, totalBytes ->
+                val written = downloadFile(date, index, segment.audioUrl, destFile) { bytesDelta, totalBytes ->
                     tracker.addBytes(index, bytesDelta, totalBytes)
                 }
                 Log.d(TAG, "seg $index complete, wrote $written bytes (attempt ${attempt + 1})")
@@ -132,49 +193,100 @@ class AudioDownloader @Inject constructor(
                 tracker.markCompleted(index, destFile.length(), destFile.length())
                 return SegmentDownloadOutcome.Success(index, destFile.absolutePath, duration)
             } catch (e: CancellationException) {
+                // Coroutine cancellation (whole download aborted). Make sure the partial file is
+                // gone, then propagate so the caller can finalize state.
+                destFile.delete()
                 throw e
             } catch (e: Throwable) {
                 lastError = e
-                Log.w(TAG, "seg $index attempt ${attempt + 1}/$MAX_ATTEMPTS_PER_SEGMENT failed: ${e.javaClass.simpleName}: ${e.message}")
                 destFile.delete()
+                if (isCancelled(date, index)) {
+                    Log.i(TAG, "seg $index cancelled by user during attempt ${attempt + 1}")
+                    return@repeat
+                }
+                Log.w(TAG, "seg $index attempt ${attempt + 1}/$MAX_ATTEMPTS_PER_SEGMENT failed: ${e.javaClass.simpleName}: ${e.message}")
                 if (attempt < MAX_ATTEMPTS_PER_SEGMENT - 1) {
                     delay(RETRY_BACKOFF_MS * (attempt + 1))
                 }
             }
         }
 
-        Log.e(TAG, "seg $index giving up after $MAX_ATTEMPTS_PER_SEGMENT attempts: ${lastError?.message}")
+        if (isCancelled(date, index)) {
+            Log.i(TAG, "seg $index user-cancelled, giving up")
+        } else {
+            Log.e(TAG, "seg $index giving up after $MAX_ATTEMPTS_PER_SEGMENT attempts: ${lastError?.message}")
+        }
         tracker.markFailed(index)
         return SegmentDownloadOutcome.Failure(index, lastError ?: Exception("Download failed"))
     }
 
-    private fun downloadFile(
+    /**
+     * Performs one download attempt with a no-progress watchdog. The watchdog fires
+     * [Call.cancel] if no bytes arrive for [STALL_TIMEOUT_MS], turning a hang into an IOException
+     * the retry loop can react to. Also registers the call for external cancellation.
+     */
+    private suspend fun downloadFile(
+        date: String,
+        index: Int,
         url: String,
         destination: File,
         onBytes: (bytesDelta: Long, totalBytes: Long) -> Unit
-    ): Long {
-        val response = tightClient.newCall(appGetRequest(url)).execute()
-        response.use {
-            if (!it.isSuccessful) throw Exception("HTTP ${it.code}")
-            val body = it.body ?: throw Exception("Empty response body")
-            val totalBytes = body.contentLength()
+    ): Long = coroutineScope {
+        val call = tightClient.newCall(appGetRequest(url))
+        synchronized(callsLock) {
+            // Late-cancel race: if cancel() raced ahead of the call being registered, honor it now.
+            if (date to index in cancelledSegments) {
+                call.cancel()
+            }
+            activeCalls[date to index] = call
+        }
 
-            var written = 0L
-            body.byteStream().use { input ->
-                FileOutputStream(destination).use { output ->
-                    val buffer = ByteArray(16_384)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        written += read
-                        onBytes(read.toLong(), totalBytes)
-                    }
+        val lastBytesAtMs = AtomicLong(SystemClock.elapsedRealtime())
+        val watchdog: Job = launch {
+            while (isActive) {
+                delay(STALL_CHECK_INTERVAL_MS)
+                val sinceProgressMs = SystemClock.elapsedRealtime() - lastBytesAtMs.get()
+                if (sinceProgressMs > STALL_TIMEOUT_MS) {
+                    Log.w(TAG, "seg $index stalled (${sinceProgressMs}ms without bytes) — cancelling call")
+                    call.cancel()
+                    break
                 }
             }
-            return written
+        }
+
+        try {
+            val response = call.execute()
+            response.use {
+                if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
+                val body = it.body ?: throw IOException("Empty response body")
+                val totalBytes = body.contentLength()
+                lastBytesAtMs.set(SystemClock.elapsedRealtime())
+
+                var written = 0L
+                body.byteStream().use { input ->
+                    FileOutputStream(destination).use { output ->
+                        val buffer = ByteArray(16_384)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            written += read
+                            lastBytesAtMs.set(SystemClock.elapsedRealtime())
+                            onBytes(read.toLong(), totalBytes)
+                        }
+                    }
+                }
+                return@coroutineScope written
+            }
+        } finally {
+            watchdog.cancel()
+            synchronized(callsLock) {
+                activeCalls.remove(date to index)
+            }
         }
     }
+
+    class CancelledByUserException : IOException("Download cancelled by user")
 
     private fun measureDuration(file: File): Long {
         val retriever = MediaMetadataRetriever()

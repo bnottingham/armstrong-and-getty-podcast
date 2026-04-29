@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -179,12 +181,11 @@ fun EpisodeListScreen(
                         livePositionMs = if (isThisDayPlaying) playbackState.currentPositionMs else null,
                         liveDurationMs = if (isThisDayPlaying) playbackState.durationMs else null,
                         downloadProgress = downloadProgressMap[day.date],
-                        onClick = {
-                            if (day.state == DownloadState.DOWNLOADED) {
-                                onEpisodeClick(day)
-                            }
-                        },
+                        // Always navigate to the player/details — even non-downloaded episodes are
+                        // useful there, since the segment list is the recovery UI for partials.
+                        onClick = { onEpisodeClick(day) },
                         onDownload = { viewModel.downloadDay(day.date) },
+                        onCancelDownload = { viewModel.cancelDownload(day.date) },
                         onReset = { viewModel.resetProgress(day.date) },
                         onDelete = { viewModel.deleteDay(day.date) },
                         onTogglePlay = {
@@ -504,6 +505,7 @@ private fun EpisodeDayCard(
     downloadProgress: DownloadProgress?,
     onClick: () -> Unit,
     onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
     onTogglePlay: () -> Unit
@@ -539,7 +541,7 @@ private fun EpisodeDayCard(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (isNotDownloaded) 0.6f else 1f)
-            .clickable(enabled = isDownloaded, onClick = onClick),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrentlyPlaying)
@@ -731,13 +733,34 @@ private fun EpisodeDayCard(
                         strokeCap = StrokeCap.Round
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = buildString {
-                            append("Downloading segment ${currentIndex + 1} of $total — $overallPercent%")
-                            if (failed > 0) append(" · $failed failed")
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = buildString {
+                                append("Downloading segment ${currentIndex + 1} of $total — $overallPercent%")
+                                if (failed > 0) append(" · $failed failed")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // TextButton (no outline, tight content padding) avoids the OutlinedButton
+                        // min-interactive-size enforcement that was pushing the visible bounds past
+                        // the card edge.
+                        TextButton(
+                            onClick = onCancelDownload,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
+                        ) {
+                            Icon(Icons.Filled.Stop, null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Cancel", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
 
                 DownloadState.ERROR -> {

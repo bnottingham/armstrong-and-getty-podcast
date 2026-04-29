@@ -9,8 +9,13 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.gms.cast.framework.CastContext
+import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.work.NewEpisodeCheckWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -20,6 +25,11 @@ class AGPodcastApp : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var repository: PodcastRepository
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -27,9 +37,14 @@ class AGPodcastApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        
+
         // Initialize CastContext early to avoid UI-thread blocking during first use
         CastContext.getSharedInstance(this)
+
+        // Any row stuck at DOWNLOADING here was orphaned by a previous process death — the active
+        // downloader is gone but the DB still claims work in flight. Reset before the worker runs
+        // so the user sees an actionable retry state.
+        appScope.launch { repository.resetStaleDownloadingStates() }
 
         scheduleNewEpisodeCheck()
     }

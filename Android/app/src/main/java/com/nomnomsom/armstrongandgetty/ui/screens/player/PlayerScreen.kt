@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Forward10
@@ -28,10 +30,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -54,8 +60,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.theme.DarkBg
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
@@ -83,8 +91,13 @@ fun PlayerScreen(
     }
     val inFlightIndices = dayProgress?.segmentsInProgress ?: emptySet()
 
-    // Load the playlist without auto-playing, so the user can resume manually.
-    LaunchedEffect(day.date) {
+    val isDayDownloading = day.state == DownloadState.DOWNLOADING
+    val anySegmentOnDisk = segments.isNotEmpty() && missingIndices.size < segments.size
+
+    // Load the playlist without auto-playing, so the user can resume manually. preparePlaylist
+    // now allows partial days, so this is safe to call regardless of downloadState. Re-keyed on
+    // missingIndices.size so a successful per-segment retry pulls the new file into the playlist.
+    LaunchedEffect(day.date, missingIndices.size) {
         viewModel.loadDay(day)
     }
 
@@ -182,6 +195,20 @@ fun PlayerScreen(
                 }
             }
 
+            // Day-level download controls. Show whenever the day isn't fully on disk so users
+            // landing on the details screen for a NONE/ERROR day have an obvious way forward.
+            if (missingIndices.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DayDownloadActions(
+                        isDownloading = isDayDownloading,
+                        anySegmentOnDisk = anySegmentOnDisk,
+                        onDownloadAll = { viewModel.downloadDay(day.date) },
+                        onCancelAll = { viewModel.cancelDownload(day.date) }
+                    )
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 SeekBar(
@@ -243,7 +270,8 @@ fun PlayerScreen(
                             viewModel.togglePlayPause()
                         }
                     },
-                    onRetry = { viewModel.retrySegment(day.date, index) }
+                    onRetry = { viewModel.retrySegment(day.date, index) },
+                    onCancel = { viewModel.cancelSegment(day.date, index) }
                 )
             }
 
@@ -394,7 +422,8 @@ private fun SegmentRow(
     status: SegmentDownloadStatus,
     onToggleExpand: () -> Unit,
     onPlay: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onCancel: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -438,7 +467,7 @@ private fun SegmentRow(
                     )
                 )
                 val subtitle = when (status) {
-                    SegmentDownloadStatus.DOWNLOADING -> "Downloading…"
+                    SegmentDownloadStatus.DOWNLOADING -> "Downloading… tap to cancel"
                     SegmentDownloadStatus.MISSING -> "Not downloaded — tap retry"
                     SegmentDownloadStatus.DOWNLOADED -> {
                         val mins = (segment.actualDurationMs.takeIf { it > 0 } ?: segment.durationMs) / 60_000
@@ -461,7 +490,12 @@ private fun SegmentRow(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            SegmentActionIcon(status = status, onPlay = onPlay, onRetry = onRetry)
+            SegmentActionIcon(
+                status = status,
+                onPlay = onPlay,
+                onRetry = onRetry,
+                onCancel = onCancel
+            )
 
             Spacer(modifier = Modifier.width(4.dp))
 
@@ -498,7 +532,8 @@ private fun SegmentRow(
 private fun SegmentActionIcon(
     status: SegmentDownloadStatus,
     onPlay: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onCancel: () -> Unit
 ) {
     when (status) {
         SegmentDownloadStatus.DOWNLOADED -> {
@@ -518,15 +553,28 @@ private fun SegmentActionIcon(
             }
         }
         SegmentDownloadStatus.DOWNLOADING -> {
-            Box(
-                modifier = Modifier.size(40.dp),
-                contentAlignment = Alignment.Center
+            // Tappable cancel button. The faint spinner behind it shows liveness so a stuck
+            // segment is still visually distinguishable from one that's just queued.
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = Gold,
-                    strokeWidth = 2.dp
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = Gold.copy(alpha = 0.5f),
+                        strokeWidth = 2.dp
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Cancel segment download",
+                        tint = Gold,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
         SegmentDownloadStatus.MISSING -> {
@@ -542,6 +590,48 @@ private fun SegmentActionIcon(
                     contentDescription = "Retry download",
                     tint = ErrorRed,
                     modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayDownloadActions(
+    isDownloading: Boolean,
+    anySegmentOnDisk: Boolean,
+    onDownloadAll: () -> Unit,
+    onCancelAll: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (isDownloading) {
+            OutlinedButton(
+                onClick = onCancelAll,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+            ) {
+                Icon(Icons.Filled.Stop, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Cancel download", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            Button(
+                onClick = onDownloadAll,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Gold.copy(alpha = 0.12f),
+                    contentColor = Gold
+                )
+            ) {
+                Icon(Icons.Filled.Download, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (anySegmentOnDisk) "Download missing segments" else "Download all segments",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
