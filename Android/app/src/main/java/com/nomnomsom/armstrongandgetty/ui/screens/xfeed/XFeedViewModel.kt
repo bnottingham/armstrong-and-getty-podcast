@@ -5,7 +5,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nomnomsom.armstrongandgetty.data.model.XFeedItem
-import com.nomnomsom.armstrongandgetty.data.remote.XFeedParser
+import com.nomnomsom.armstrongandgetty.data.repository.XFeedCursor
+import com.nomnomsom.armstrongandgetty.data.repository.XFeedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -20,13 +21,15 @@ data class XFeedUiState(
     val items: List<XFeedItem> = emptyList(),
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val canLoadMore: Boolean = true,
     val error: String? = null
 )
 
 @HiltViewModel
 class XFeedViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val xFeedParser: XFeedParser
+    private val xFeedRepository: XFeedRepository
 ) : ViewModel() {
 
     companion object {
@@ -61,6 +64,7 @@ class XFeedViewModel @Inject constructor(
 
     private var isTabActive: Boolean = false
     private var pollingJob: Job? = null
+    private var nextCursor: XFeedCursor? = null
 
     init {
         loadFeed(isInitial = true)
@@ -69,6 +73,38 @@ class XFeedViewModel @Inject constructor(
 
     fun refresh() {
         loadFeed(isInitial = false)
+    }
+
+    fun reloadLatest() {
+        loadFeed(isInitial = false)
+    }
+
+    fun loadNextPage() {
+        val cursor = nextCursor ?: return
+        val currentState = _uiState.value
+        if (currentState.isLoading || currentState.isRefreshing || currentState.isLoadingMore || !currentState.canLoadMore) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMore = true, error = null)
+
+            val result = xFeedRepository.fetchPage(cursor = cursor)
+            if (result.isSuccess) {
+                val page = result.getOrThrow()
+                nextCursor = page.nextCursor
+                _uiState.value = _uiState.value.copy(
+                    items = mergeFeed(_uiState.value.items, page.items),
+                    isLoadingMore = false,
+                    canLoadMore = page.hasMore
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingMore = false,
+                    error = result.exceptionOrNull()?.message ?: "Failed to load more posts"
+                )
+            }
+        }
     }
 
     fun onTabVisible() {
@@ -132,20 +168,29 @@ class XFeedViewModel @Inject constructor(
 
     /** Background poll — updates counts without toggling loading state. */
     private suspend fun pollFeed() {
-        val result = xFeedParser.fetchFeed()
+        val result = xFeedRepository.fetchPage()
         if (result.isFailure) return
 
-        val freshItems = result.getOrThrow()
+        val page = result.getOrThrow()
+        val freshItems = page.items
         if (freshItems.isEmpty()) return
 
-        _uiState.value = _uiState.value.copy(items = freshItems)
+        val hadOnlyFirstPage = nextCursor == null || _uiState.value.items.size <= XFeedRepository.PAGE_SIZE
+        if (hadOnlyFirstPage) {
+            nextCursor = page.nextCursor
+        }
+
+        _uiState.value = _uiState.value.copy(
+            items = mergeFeed(freshItems, _uiState.value.items),
+            canLoadMore = _uiState.value.canLoadMore || page.hasMore
+        )
 
         if (!isTabActive) {
-            updateUnreadCount(freshItems)
+            updateUnreadCount(_uiState.value.items)
         }
 
         if (isTabActive && viewingBaselineTimestampMs > 0L) {
-            val newWhileViewing = freshItems.count { it.timestampMs > viewingBaselineTimestampMs }
+            val newWhileViewing = _uiState.value.items.count { it.timestampMs > viewingBaselineTimestampMs }
             _newPostsWhileViewing.value = newWhileViewing
         }
 
@@ -157,16 +202,21 @@ class XFeedViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 isLoading = isInitial && _uiState.value.items.isEmpty(),
                 isRefreshing = !isInitial,
+                isLoadingMore = false,
                 error = null
             )
 
-            val result = xFeedParser.fetchFeed()
+            val result = xFeedRepository.fetchPage()
             if (result.isSuccess) {
-                val items = result.getOrThrow()
+                val page = result.getOrThrow()
+                val items = page.items
+                nextCursor = page.nextCursor
+
                 _uiState.value = _uiState.value.copy(
                     items = items,
                     isLoading = false,
-                    isRefreshing = false
+                    isRefreshing = false,
+                    canLoadMore = page.hasMore
                 )
 
                 updateUnreadCount(items)
@@ -185,6 +235,15 @@ class XFeedViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun mergeFeed(primary: List<XFeedItem>, secondary: List<XFeedItem>): List<XFeedItem> {
+        return (primary + secondary)
+            .distinctBy { it.tweetId }
+            .sortedWith(
+                compareByDescending<XFeedItem> { it.timestampMs }
+                    .thenByDescending { it.tweetId }
+            )
     }
 
     override fun onCleared() {

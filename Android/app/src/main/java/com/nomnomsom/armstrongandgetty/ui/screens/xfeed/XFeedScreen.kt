@@ -2,61 +2,77 @@ package com.nomnomsom.armstrongandgetty.ui.screens.xfeed
 
 import android.content.Intent
 import android.net.Uri
-import android.webkit.CookieManager
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import coil3.compose.AsyncImage
 import com.nomnomsom.armstrongandgetty.data.model.XFeedItem
-import com.nomnomsom.armstrongandgetty.ui.theme.Gold
+import com.nomnomsom.armstrongandgetty.data.model.XFeedMedia
 import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
 import com.nomnomsom.armstrongandgetty.ui.theme.TextPrimary
 import com.nomnomsom.armstrongandgetty.ui.theme.TextSecondary
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val XBlue = Color(0xFF1D9BF0)
+private val FeedLine = Color(0xFF2F3336)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +85,7 @@ fun XFeedScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.Black)
     ) {
         XFeedHeader()
 
@@ -79,44 +95,42 @@ fun XFeedScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Gold)
+                    CircularProgressIndicator(color = XBlue)
                 }
             }
 
             uiState.error != null && uiState.items.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Couldn't load feed",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Pull down to retry",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted
-                        )
-                    }
-                }
+                RefreshableEmptyFeedMessage(
+                    title = "Couldn't load feed",
+                    subtitle = "Pull down to retry",
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = viewModel::refresh
+                )
             }
 
-            uiState.items.isNotEmpty() -> {
-                // Pull-to-refresh only intercepts the drag when the WebView is scrolled to the top.
-                var webViewAtTop by remember { mutableStateOf(true) }
+            uiState.items.isEmpty() -> {
+                RefreshableEmptyFeedMessage(
+                    title = "No posts yet",
+                    subtitle = "Pull down to refresh",
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = viewModel::refresh
+                )
+            }
 
-                // Empty NestedScrollConnection: doesn't consume anything but wires the
-                // WebView into Compose's nested-scroll chain so PullToRefreshBox can see drags.
-                val nestedScrollConnection = remember {
-                    object : NestedScrollConnection {
-                        override fun onPreScroll(
-                            available: Offset,
-                            source: NestedScrollSource
-                        ): Offset = Offset.Zero
+            else -> {
+                val listState = rememberLazyListState()
+                val scope = rememberCoroutineScope()
+
+                LaunchedEffect(listState, uiState.canLoadMore, uiState.isLoadingMore) {
+                    snapshotFlow {
+                        val layout = listState.layoutInfo
+                        val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 4
                     }
+                        .distinctUntilChanged()
+                        .collect { shouldLoad ->
+                            if (shouldLoad) viewModel.loadNextPage()
+                        }
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -125,21 +139,43 @@ fun XFeedScreen(
                         onRefresh = { viewModel.refresh() },
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        val refreshKey = remember(uiState.items) {
-                            uiState.items.hashCode()
-                        }
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (uiState.error != null) {
+                                item(key = "feed-error") {
+                                    FeedErrorStrip(uiState.error.orEmpty())
+                                }
+                            }
 
-                        key(refreshKey) {
-                            TweetFeedWebView(
+                            items(
                                 items = uiState.items,
-                                onScrollChanged = { scrollY ->
-                                    webViewAtTop = scrollY == 0
-                                },
-                                enableParentScroll = webViewAtTop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .nestedScroll(nestedScrollConnection)
-                            )
+                                key = { it.tweetId }
+                            ) { item ->
+                                XPostRow(item = item)
+                            }
+
+                            if (uiState.isLoadingMore) {
+                                item(key = "loading-more") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = XBlue,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            } else {
+                                item(key = "feed-bottom-space") {
+                                    Spacer(modifier = Modifier.height(56.dp))
+                                }
+                            }
                         }
                     }
 
@@ -155,7 +191,8 @@ fun XFeedScreen(
                             count = newPostsWhileViewing,
                             onClick = {
                                 viewModel.dismissNewPostsBanner()
-                                viewModel.refresh()
+                                viewModel.reloadLatest()
+                                scope.launch { listState.animateScrollToItem(0) }
                             }
                         )
                     }
@@ -163,6 +200,63 @@ fun XFeedScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RefreshableEmptyFeedMessage(
+    title: String,
+    subtitle: String,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
+) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        EmptyFeedMessage(title = title, subtitle = subtitle)
+    }
+}
+
+@Composable
+private fun EmptyFeedMessage(
+    title: String,
+    subtitle: String
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedErrorStrip(message: String) {
+    Text(
+        text = message,
+        color = Color.White,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF3A1F24))
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -173,7 +267,7 @@ private fun NewPostsBanner(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(24.dp))
-            .background(Gold)
+            .background(XBlue)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -181,7 +275,7 @@ private fun NewPostsBanner(
         Icon(
             imageVector = Icons.Filled.ArrowUpward,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.surface,
+            tint = Color.White,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
@@ -189,7 +283,7 @@ private fun NewPostsBanner(
             text = "$count new post${if (count != 1) "s" else ""}",
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.surface
+            color = Color.White
         )
     }
 }
@@ -199,249 +293,379 @@ private fun XFeedHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(Color.Black)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .clip(CircleShape)
+                .background(Color.White),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "𝕏",
+                text = "X",
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                fontWeight = FontWeight.Black,
+                color = Color.Black
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
-                text = "A&G Feed",
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp)
+                text = "A&G List",
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                color = TextPrimary
             )
             Text(
-                text = "POSTS FROM THE A&G COMMUNITY",
-                style = MaterialTheme.typography.labelSmall
+                text = "LATEST POSTS",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted
+            )
+        }
+    }
+    HorizontalDivider(color = FeedLine, thickness = 1.dp)
+}
+
+@Composable
+private fun XPostRow(item: XFeedItem) {
+    val context = LocalContext.current
+    val relativeTime = remember(item.timestampMs) { formatRelativeTime(item.timestampMs) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .clickable {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.tweetUrl)))
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Avatar(
+                name = item.author.name.ifBlank { item.author.username },
+                url = item.author.profileImageUrl
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = item.author.name.ifBlank { item.author.username.ifBlank { "X user" } },
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (item.author.verified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = XBlue,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "@${item.author.username} · $relativeTime",
+                        color = TextMuted,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Text(
+                    text = item.text,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp
+                )
+
+                if (item.media.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    MediaGrid(media = item.media)
+                } else {
+                    val url = item.urls.firstOrNull { !it.displayUrl.isNullOrBlank() || !it.expandedUrl.isNullOrBlank() }
+                    if (url != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        LinkPill(
+                            display = url.displayUrl ?: url.expandedUrl.orEmpty(),
+                            target = url.expandedUrl
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                MetricRow(item = item)
+            }
+        }
+    }
+    HorizontalDivider(color = FeedLine, thickness = 1.dp)
+}
+
+@Composable
+private fun Avatar(
+    name: String,
+    url: String?
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF202327)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                text = name.firstOrNull()?.uppercaseChar()?.toString() ?: "X",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
             )
         }
     }
 }
 
-/**
- * Hosts one iframe per tweet (platform.twitter.com's embed page) and listens for
- * the embed's `twttr.private.resize` postMessage to size each iframe correctly.
- * `enableParentScroll`/`onScrollChanged` let the parent PullToRefreshBox intercept
- * the downward drag only when the WebView is already at the top.
- */
 @Composable
-private fun TweetFeedWebView(
-    items: List<XFeedItem>,
-    onScrollChanged: (Int) -> Unit,
-    enableParentScroll: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
+private fun MediaGrid(media: List<XFeedMedia>) {
+    val items = media
+        .mapNotNull { item ->
+            val url = item.previewImageUrl ?: item.url
+            if (url == null) null else item to url
+        }
+        .take(4)
 
-    val html = remember(items) {
-        buildEmbedPageHtml(items)
-    }
+    if (items.isEmpty()) return
 
-    AndroidView(
-        factory = { ctx ->
-            object : WebView(ctx) {
-                override fun overScrollBy(
-                    deltaX: Int, deltaY: Int,
-                    scrollX: Int, scrollY: Int,
-                    scrollRangeX: Int, scrollRangeY: Int,
-                    maxOverScrollX: Int, maxOverScrollY: Int,
-                    isTouchEvent: Boolean
-                ): Boolean {
-                    onScrollChanged(scrollY + deltaY)
-                    return super.overScrollBy(
-                        deltaX, deltaY,
-                        scrollX, scrollY,
-                        scrollRangeX, scrollRangeY,
-                        maxOverScrollX, maxOverScrollY,
-                        isTouchEvent
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(FeedLine)
+    ) {
+        when (items.size) {
+            1 -> MediaTile(
+                media = items[0].first,
+                imageUrl = items[0].second,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(mediaAspectRatio(items[0].first))
+            )
+
+            2 -> Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                items.forEach { (mediaItem, imageUrl) ->
+                    MediaTile(
+                        media = mediaItem,
+                        imageUrl = imageUrl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
                     )
                 }
-
-                override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
-                    super.onScrollChanged(l, t, oldl, oldt)
-                    onScrollChanged(t)
-                }
-
-                override fun onOverScrolled(
-                    scrollX: Int, scrollY: Int,
-                    clampedX: Boolean, clampedY: Boolean
-                ) {
-                    super.onOverScrolled(scrollX, scrollY, clampedX, clampedY)
-                    onScrollChanged(scrollY)
-                }
-            }.apply {
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-
-                setBackgroundColor(android.graphics.Color.parseColor("#0E0F13"))
-
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    loadWithOverviewMode = true
-                    useWideViewPort = true
-                    builtInZoomControls = false
-                    setSupportZoom(false)
-                    mediaPlaybackRequiresUserGesture = false
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                }
-
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?
-                    ): Boolean {
-                        val url = request?.url?.toString() ?: return false
-
-                        // Let Twitter/X embed resources load in-WebView; send everything else to the device browser.
-                        if (url.contains("platform.twitter.com")) return false
-                        if (url.contains("syndication.twitter.com")) return false
-                        if (url.contains("cdn.syndication.twimg.com")) return false
-                        if (url.contains("pbs.twimg.com")) return false
-                        if (url.contains("abs.twimg.com")) return false
-                        if (url.contains("video.twimg.com")) return false
-                        if (url.contains("ton.twimg.com")) return false
-
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        ctx.startActivity(intent)
-                        return true
-                    }
-                }
-
-                webChromeClient = WebChromeClient()
-
-                // Base URL is on Twitter's own domain so the embed iframes aren't blocked as cross-origin.
-                loadDataWithBaseURL(
-                    "https://platform.twitter.com",
-                    html,
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
             }
-        },
-        update = { webView ->
-            // At the top of the page we disable overscroll and release the touch lock so
-            // the parent PullToRefreshBox owns the downward drag.
-            webView.overScrollMode = if (enableParentScroll) {
-                WebView.OVER_SCROLL_NEVER
-            } else {
-                WebView.OVER_SCROLL_IF_CONTENT_SCROLLS
-            }
-            webView.parent?.requestDisallowInterceptTouchEvent(!enableParentScroll)
-        },
-        modifier = modifier
-    )
-}
 
-private fun buildEmbedPageHtml(items: List<XFeedItem>): String {
-    val iframes = items.mapIndexed { index, item ->
-        val embedUrl = "https://platform.twitter.com/embed/Tweet.html" +
-                "?id=${item.tweetId}" +
-                "&theme=dark" +
-                "&dnt=true"
+            else -> {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    items.chunked(2).forEach { rowItems ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                            rowItems.forEach { (mediaItem, imageUrl) ->
+                                MediaTile(
+                                    media = mediaItem,
+                                    imageUrl = imageUrl,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1.35f)
+                                )
+                            }
 
-        """
-        <div class="tweet-container" id="container-$index">
-            <iframe
-                id="frame-$index"
-                src="$embedUrl"
-                class="tweet-frame"
-                frameborder="0"
-                scrolling="no"
-                allowtransparency="true"
-            ></iframe>
-        </div>
-        """.trimIndent()
-    }.joinToString("\n")
-
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-                background-color: #0E0F13;
-                padding: 4px;
-                -webkit-overflow-scrolling: touch;
-            }
-            .tweet-container {
-                margin-bottom: 8px;
-                border-radius: 12px;
-                overflow: hidden;
-            }
-            .tweet-frame {
-                width: 100%;
-                border: none;
-                display: block;
-                height: 350px;
-            }
-        </style>
-    </head>
-    <body>
-        $iframes
-        
-        <div style="height: 80px;"></div>
-        
-        <script>
-            // Twitter's embed posts 'twttr.embed' / 'twttr.private.resize' messages with
-            // the final rendered height; resize the matching iframe to avoid clipping.
-            window.addEventListener('message', function(event) {
-                try {
-                    var data = event.data;
-
-                    if (typeof data === 'object' && data['twttr.embed']) {
-                        var embed = data['twttr.embed'];
-                        if (embed.method === 'twttr.private.resize') {
-                            var params = embed.params;
-                            if (params && params.length > 0) {
-                                var height = params[0].height;
-                                if (height) {
-                                    var frames = document.querySelectorAll('.tweet-frame');
-                                    for (var i = 0; i < frames.length; i++) {
-                                        if (frames[i].contentWindow === event.source) {
-                                            frames[i].style.height = height + 'px';
-                                            break;
-                                        }
-                                    }
-                                }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
 
-                    if (typeof data === 'string') {
-                        try {
-                            var parsed = JSON.parse(data);
-                            if (parsed.height && parsed.height > 0) {
-                                var frames = document.querySelectorAll('.tweet-frame');
-                                for (var i = 0; i < frames.length; i++) {
-                                    if (frames[i].contentWindow === event.source) {
-                                        frames[i].style.height = parsed.height + 'px';
-                                        break;
-                                    }
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                } catch(e) {}
-            });
-        </script>
-    </body>
-    </html>
-    """.trimIndent()
+@Composable
+private fun MediaTile(
+    media: XFeedMedia,
+    imageUrl: String,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.background(Color(0xFF16181C))) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (media.type == "video" || media.type == "animated_gif") {
+            Text(
+                text = if (media.type == "animated_gif") "GIF" else "VIDEO",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LinkPill(
+    display: String,
+    target: String?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF16181C))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = display,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!target.isNullOrBlank() && target != display) {
+                Text(
+                    text = target,
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricRow(item: XFeedItem) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Metric(
+            icon = Icons.Outlined.ChatBubbleOutline,
+            value = item.metrics.replies
+        )
+        Metric(
+            icon = Icons.Outlined.Repeat,
+            value = item.metrics.reposts + item.metrics.quotes
+        )
+        Metric(
+            icon = Icons.Outlined.FavoriteBorder,
+            value = item.metrics.likes
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(17.dp)
+        )
+    }
+}
+
+@Composable
+private fun Metric(
+    icon: ImageVector,
+    value: Int
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.width(64.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(17.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = if (value > 0) formatCompactNumber(value) else "",
+            color = TextMuted,
+            fontSize = 12.sp,
+            maxLines = 1
+        )
+    }
+}
+
+private fun mediaAspectRatio(media: XFeedMedia): Float {
+    val width = media.width ?: return 16f / 9f
+    val height = media.height ?: return 16f / 9f
+    return if (width > 0 && height > 0) {
+        (width.toFloat() / height.toFloat()).coerceIn(0.8f, 1.9f)
+    } else {
+        16f / 9f
+    }
+}
+
+private fun formatRelativeTime(timestampMs: Long): String {
+    val age = Duration.between(Instant.ofEpochMilli(timestampMs), Instant.now()).toMillis()
+    return when {
+        age < 60_000 -> "now"
+        age < 60 * 60_000 -> "${age / 60_000}m"
+        age < 24 * 60 * 60_000 -> "${age / (60 * 60_000)}h"
+        age < 7 * 24 * 60 * 60_000 -> "${age / (24 * 60 * 60_000)}d"
+        else -> DateTimeFormatter
+            .ofPattern("MMM d", Locale.US)
+            .format(Instant.ofEpochMilli(timestampMs).atZone(ZoneId.systemDefault()))
+    }
+}
+
+private fun formatCompactNumber(value: Int): String {
+    return when {
+        value >= 1_000_000 -> "${formatOneDecimal(value / 1_000_000f)}M"
+        value >= 1_000 -> "${formatOneDecimal(value / 1_000f)}K"
+        else -> value.toString()
+    }
+}
+
+private fun formatOneDecimal(value: Float): String {
+    return String.format(Locale.US, "%.1f", value).removeSuffix(".0")
 }
