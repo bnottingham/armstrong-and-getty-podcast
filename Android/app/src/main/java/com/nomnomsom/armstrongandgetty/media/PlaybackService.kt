@@ -33,6 +33,7 @@ import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+@OptIn(UnstableApi::class)
 @AndroidEntryPoint
 class PlaybackService : MediaLibraryService() {
 

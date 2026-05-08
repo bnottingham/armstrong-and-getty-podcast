@@ -1,6 +1,7 @@
 package com.nomnomsom.armstrongandgetty
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -22,6 +23,10 @@ import javax.inject.Inject
 @HiltAndroidApp
 class AGPodcastApp : Application(), Configuration.Provider {
 
+    companion object {
+        private const val TAG = "AGPodcastApp"
+    }
+
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -38,8 +43,13 @@ class AGPodcastApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize CastContext early to avoid UI-thread blocking during first use
-        CastContext.getSharedInstance(this)
+        // Initialize CastContext early to avoid UI-thread blocking during first use. Devices
+        // without healthy Play Services should still be able to use local playback.
+        try {
+            CastContext.getSharedInstance(this)
+        } catch (e: Exception) {
+            Log.w(TAG, "Cast unavailable during app startup", e)
+        }
 
         // Any row stuck at DOWNLOADING here was orphaned by a previous process death — the active
         // downloader is gone but the DB still claims work in flight. Reset before the worker runs

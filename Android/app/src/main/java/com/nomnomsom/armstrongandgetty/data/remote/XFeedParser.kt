@@ -27,7 +27,7 @@ class XFeedParser @Inject constructor(
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${response.code}"))
                 }
-                val body = response.body?.string() ?: ""
+                val body = response.body.string()
                 Result.success(parseRss(body))
             }
         } catch (e: CancellationException) {

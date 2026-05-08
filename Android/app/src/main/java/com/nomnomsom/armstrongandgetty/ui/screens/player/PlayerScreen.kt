@@ -211,9 +211,14 @@ fun PlayerScreen(
 
             item {
                 Spacer(modifier = Modifier.height(24.dp))
+                val seekDurationMs = if (playbackState.currentDayDate == day.date && playbackState.durationMs > 0) {
+                    playbackState.durationMs
+                } else {
+                    day.totalDurationMs
+                }
                 SeekBar(
                     currentMs = playbackState.currentPositionMs,
-                    durationMs = playbackState.durationMs.coerceAtLeast(day.totalDurationMs),
+                    durationMs = seekDurationMs,
                     onSeek = { viewModel.seekTo(it) },
                     modifier = Modifier.padding(horizontal = 30.dp)
                 )
@@ -248,7 +253,7 @@ fun PlayerScreen(
             }
 
             itemsIndexed(segments, key = { index, seg -> "${day.date}_$index" }) { index, segment ->
-                var expanded by rememberSaveable(key = "${day.date}_seg_$index") {
+                var expanded by rememberSaveable {
                     mutableStateOf(false)
                 }
 

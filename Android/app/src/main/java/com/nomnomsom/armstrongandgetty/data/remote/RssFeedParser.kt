@@ -27,7 +27,7 @@ class RssFeedParser @Inject constructor(
                     return@withContext Result.failure(Exception("HTTP ${response.code}"))
                 }
 
-                val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty body"))
+                val body = response.body.string()
                 val items = parseRss(body)
                 Result.success(items)
             }

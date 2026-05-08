@@ -44,7 +44,7 @@ typealias DownloadProgressCallback = (DownloadProgress) -> Unit
 
 @Singleton
 class AudioDownloader @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient
 ) {
     companion object {
@@ -164,10 +164,21 @@ class AudioDownloader @Inject constructor(
     ): SegmentDownloadOutcome {
         val destFile = segmentFile(date, index)
         if (destFile.exists() && destFile.length() > 0) {
-            Log.d(TAG, "seg $index already on disk (${destFile.length()} bytes), skipping")
-            val duration = measureDuration(destFile)
-            tracker.markCompleted(index, destFile.length(), destFile.length())
-            return SegmentDownloadOutcome.Success(index, destFile.absolutePath, duration)
+            val duration = try {
+                measureDuration(destFile)
+            } catch (e: Exception) {
+                Log.w(TAG, "seg $index existing file could not be probed; redownloading", e)
+                0L
+            }
+
+            if (duration > 0) {
+                Log.d(TAG, "seg $index already on disk (${destFile.length()} bytes), skipping")
+                tracker.markCompleted(index, destFile.length(), destFile.length())
+                return SegmentDownloadOutcome.Success(index, destFile.absolutePath, duration)
+            }
+
+            Log.w(TAG, "seg $index existing file has no duration; deleting and redownloading")
+            destFile.delete()
         }
 
         // Fresh entry into this segment's retry loop — drop any stale cancel-intent left over from
@@ -190,6 +201,9 @@ class AudioDownloader @Inject constructor(
                 }
                 Log.d(TAG, "seg $index complete, wrote $written bytes (attempt ${attempt + 1})")
                 val duration = measureDuration(destFile)
+                if (duration <= 0) {
+                    throw IOException("Downloaded audio has no measurable duration")
+                }
                 tracker.markCompleted(index, destFile.length(), destFile.length())
                 return SegmentDownloadOutcome.Success(index, destFile.absolutePath, duration)
             } catch (e: CancellationException) {
@@ -232,6 +246,10 @@ class AudioDownloader @Inject constructor(
         destination: File,
         onBytes: (bytesDelta: Long, totalBytes: Long) -> Unit
     ): Long = coroutineScope {
+        destination.parentFile?.mkdirs()
+        val partial = partialSegmentFile(date, index)
+        partial.delete()
+
         val call = tightClient.newCall(appGetRequest(url))
         synchronized(callsLock) {
             // Late-cancel race: if cancel() raced ahead of the call being registered, honor it now.
@@ -242,6 +260,7 @@ class AudioDownloader @Inject constructor(
         }
 
         val lastBytesAtMs = AtomicLong(SystemClock.elapsedRealtime())
+        var promotedPartial = false
         val watchdog: Job = launch {
             while (isActive) {
                 delay(STALL_CHECK_INTERVAL_MS)
@@ -258,13 +277,13 @@ class AudioDownloader @Inject constructor(
             val response = call.execute()
             response.use {
                 if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
-                val body = it.body ?: throw IOException("Empty response body")
+                val body = it.body
                 val totalBytes = body.contentLength()
                 lastBytesAtMs.set(SystemClock.elapsedRealtime())
 
                 var written = 0L
                 body.byteStream().use { input ->
-                    FileOutputStream(destination).use { output ->
+                    FileOutputStream(partial).use { output ->
                         val buffer = ByteArray(16_384)
                         while (true) {
                             val read = input.read(buffer)
@@ -276,10 +295,26 @@ class AudioDownloader @Inject constructor(
                         }
                     }
                 }
+                if (written <= 0L) {
+                    throw IOException("Downloaded empty audio file")
+                }
+                if (totalBytes >= 0 && written != totalBytes) {
+                    throw IOException("Incomplete download: wrote $written of $totalBytes bytes")
+                }
+                if (destination.exists() && !destination.delete()) {
+                    throw IOException("Could not replace existing segment file")
+                }
+                if (!partial.renameTo(destination)) {
+                    throw IOException("Could not promote partial segment file")
+                }
+                promotedPartial = true
                 return@coroutineScope written
             }
         } finally {
             watchdog.cancel()
+            if (!promotedPartial) {
+                partial.delete()
+            }
             synchronized(callsLock) {
                 activeCalls.remove(date to index)
             }
@@ -301,11 +336,14 @@ class AudioDownloader @Inject constructor(
     private fun segmentFile(date: String, index: Int): File =
         File(podcastDir, "ag_${date}_seg${index}.mp3")
 
+    private fun partialSegmentFile(date: String, index: Int): File =
+        File(podcastDir, "ag_${date}_seg${index}.mp3.part")
+
     fun getSegmentFiles(date: String, segmentCount: Int): List<String> =
         (0 until segmentCount).map { segmentFile(date, it).absolutePath }
 
     fun hasAllSegments(date: String, segmentCount: Int): Boolean =
-        (0 until segmentCount).all { segmentFile(date, it).exists() }
+        (0 until segmentCount).all { hasSegment(date, it) }
 
     fun hasSegment(date: String, index: Int): Boolean =
         segmentFile(date, index).let { it.exists() && it.length() > 0 }

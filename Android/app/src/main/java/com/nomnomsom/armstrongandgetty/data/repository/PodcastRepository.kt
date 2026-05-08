@@ -20,6 +20,8 @@ import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -27,6 +29,12 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
+
+data class LiveSegmentAppendResult(
+    val date: String,
+    val previousSegmentCount: Int,
+    val appendedSegmentIndices: List<Int>
+)
 
 @Singleton
 class PodcastRepository @Inject constructor(
@@ -40,10 +48,11 @@ class PodcastRepository @Inject constructor(
         private const val TAG = "PodcastRepository"
     }
 
-    // Guards against the worker + viewmodel both firing `downloadDay` for the same date on launch.
-    // Without this, two parallel download loops race on the same files and the progress tracker.
-    private val activeDownloadsLock = Any()
-    private val activeDownloads = mutableSetOf<String>()
+    // Serializes all file-writing operations per day. The worker, refresh path, player screen, and
+    // per-segment retry actions can all discover live content; only one of them may touch a day's
+    // segment files at a time.
+    private val dayDownloadLocksGuard = Any()
+    private val dayDownloadLocks = mutableMapOf<String, Mutex>()
 
     fun isUserDeleted(date: String): Boolean = deletionTracker.isDeleted(date)
 
@@ -56,6 +65,20 @@ class PodcastRepository @Inject constructor(
     fun observeDay(date: String): Flow<PodcastDay?> = dao.observeDay(date)
 
     suspend fun getDayByDate(date: String): PodcastDay? = dao.getDayByDate(date)
+
+    private suspend fun <T> withDayDownloadLock(
+        date: String,
+        operation: String,
+        block: suspend () -> T
+    ): T {
+        val lock = synchronized(dayDownloadLocksGuard) {
+            dayDownloadLocks.getOrPut(date) { Mutex() }
+        }
+        if (lock.isLocked) {
+            Log.d(TAG, "$operation $date waiting for active segment file operation")
+        }
+        return lock.withLock { block() }
+    }
 
     suspend fun refreshFeed(): Result<String> {
         val result = rssFeedParser.fetchFeed()
@@ -70,7 +93,8 @@ class PodcastRepository @Inject constructor(
             if (latestDate.isEmpty() || date > latestDate) latestDate = date
 
             val existingDay = dao.getDayByDate(date)
-            val segments = dayItems.mapIndexed { index, item ->
+            val existingSegments = existingDay?.let { parseSegments(it.segmentsJson) } ?: emptyList()
+            val rssSegments = dayItems.mapIndexed { index, item ->
                 val hourLabel = extractHourLabel(item.title, index + 1)
                 Segment(
                     hour = hourLabel,
@@ -87,9 +111,10 @@ class PodcastRepository @Inject constructor(
                 else extractHourLabel(seg.title, index + 1)
                 seg.copy(hour = hourLabel)
             }
+            val segments = mergeDownloadedMetadata(rssSegments, existingSegments)
 
             val segmentsJson = gson.toJson(segments)
-            val totalDuration = segments.sumOf { it.durationMs }
+            val totalDuration = segments.sumOf { it.effectiveDurationMs }
             val summary = buildSummary(segments)
             val isComplete = isDayComplete(date, segments)
 
@@ -110,7 +135,6 @@ class PodcastRepository @Inject constructor(
                 )
                 dao.insertOrReplace(day)
             } else {
-                val existingSegments = parseSegments(existingDay.segmentsJson)
                 if (segments.size > existingSegments.size || !isComplete) {
                     dao.updateSegments(
                         date = date,
@@ -131,36 +155,31 @@ class PodcastRepository @Inject constructor(
     suspend fun downloadDay(
         date: String,
         onProgress: DownloadProgressCallback? = null
-    ): Result<String> {
-        val claimed = synchronized(activeDownloadsLock) {
-            if (date in activeDownloads) false else activeDownloads.add(date)
-        }
-        if (!claimed) {
-            Log.d(TAG, "downloadDay $date skipped: another call is already downloading this date")
-            return Result.success(date)
-        }
-
+    ): Result<String> = withDayDownloadLock(date, "downloadDay") {
         var segmentsForCleanup: List<Segment> = emptyList()
         var summaryForCleanup = ""
         var isCompleteForCleanup = false
 
         try {
-            val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
+            val day = dao.getDayByDate(date)
+                ?: return@withDayDownloadLock Result.failure(Exception("Day not found"))
             val segments = parseSegments(day.segmentsJson)
-            if (segments.isEmpty()) return Result.failure(Exception("No segments"))
+            if (segments.isEmpty()) {
+                return@withDayDownloadLock Result.failure(Exception("No segments"))
+            }
             segmentsForCleanup = segments
             summaryForCleanup = day.summary
             isCompleteForCleanup = day.isComplete
 
             if (audioDownloader.hasAllSegments(date, segments.size)) {
                 dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
-                return Result.success(date)
+                return@withDayDownloadLock Result.success(date)
             }
 
             dao.updateDownloadState(date, DownloadState.DOWNLOADING.value)
 
             val outcomes = audioDownloader.downloadSegments(date, segments, onProgress)
-            return finalizeDownload(date, segments, outcomes, day.summary, day.isComplete)
+            finalizeDownload(date, segments, outcomes, day.summary, day.isComplete)
         } catch (e: CancellationException) {
             // The viewModelScope job was cancelled (user hit Cancel, or screen was torn down).
             // Without this NonCancellable cleanup the row would be left at DOWNLOADING forever.
@@ -168,8 +187,6 @@ class PodcastRepository @Inject constructor(
                 finalizeFromDisk(date, segmentsForCleanup, summaryForCleanup, isCompleteForCleanup)
             }
             throw e
-        } finally {
-            synchronized(activeDownloadsLock) { activeDownloads.remove(date) }
         }
     }
 
@@ -216,37 +233,73 @@ class PodcastRepository @Inject constructor(
         finalizeDownload(date, segments, outcomes, summary, isComplete)
     }
 
-    suspend fun appendNewSegments(date: String): Result<String> {
-        val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
+    suspend fun appendNewSegments(
+        date: String,
+        onProgress: DownloadProgressCallback? = null
+    ): Result<LiveSegmentAppendResult> = withDayDownloadLock(date, "appendNewSegments") {
+        val day = dao.getDayByDate(date)
+            ?: return@withDayDownloadLock Result.failure(Exception("Day not found"))
         if (day.state != DownloadState.DOWNLOADED) {
-            return Result.failure(Exception("Day not downloaded"))
+            return@withDayDownloadLock Result.failure(Exception("Day not downloaded"))
         }
 
         val previousSegmentCount = parseSegments(day.segmentsJson).size
 
         val refreshResult = refreshFeed()
-        if (refreshResult.isFailure) return Result.failure(refreshResult.exceptionOrNull()!!)
+        if (refreshResult.isFailure) {
+            return@withDayDownloadLock Result.failure(refreshResult.exceptionOrNull()!!)
+        }
 
-        val updatedDay = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found after refresh"))
+        val updatedDay = dao.getDayByDate(date)
+            ?: return@withDayDownloadLock Result.failure(Exception("Day not found after refresh"))
         val updatedSegments = parseSegments(updatedDay.segmentsJson)
 
         if (updatedSegments.size <= previousSegmentCount) {
-            return Result.success(date)
+            return@withDayDownloadLock Result.success(
+                LiveSegmentAppendResult(date, previousSegmentCount, emptyList())
+            )
         }
 
-        val outcomes = audioDownloader.downloadSegments(date, updatedSegments)
-        return finalizeDownload(date, updatedSegments, outcomes, updatedDay.summary, updatedDay.isComplete)
+        val outcomes = audioDownloader.downloadSegments(date, updatedSegments, onProgress)
+        val finalizeResult = finalizeDownload(
+            date = date,
+            segments = updatedSegments,
+            outcomes = outcomes,
+            summary = updatedDay.summary,
+            isComplete = updatedDay.isComplete
+        )
+
+        val newRange = previousSegmentCount until updatedSegments.size
+        val appendedIndices = newRange.filter { audioDownloader.hasSegment(date, it) }
+        if (appendedIndices.isNotEmpty()) {
+            return@withDayDownloadLock Result.success(
+                LiveSegmentAppendResult(date, previousSegmentCount, appendedIndices)
+            )
+        }
+
+        val firstNewFailure = outcomes
+            .filterIsInstance<SegmentDownloadOutcome.Failure>()
+            .firstOrNull { it.index in newRange }
+
+        if (firstNewFailure != null) {
+            Result.failure(firstNewFailure.error)
+        } else {
+            finalizeResult.map {
+                LiveSegmentAppendResult(date, previousSegmentCount, emptyList())
+            }
+        }
     }
 
     suspend fun retrySegment(
         date: String,
         index: Int,
         onProgress: DownloadProgressCallback? = null
-    ): Result<String> {
-        val day = dao.getDayByDate(date) ?: return Result.failure(Exception("Day not found"))
+    ): Result<String> = withDayDownloadLock(date, "retrySegment") {
+        val day = dao.getDayByDate(date)
+            ?: return@withDayDownloadLock Result.failure(Exception("Day not found"))
         val segments = parseSegments(day.segmentsJson)
         val segment = segments.getOrNull(index)
-            ?: return Result.failure(Exception("Segment $index out of range"))
+            ?: return@withDayDownloadLock Result.failure(Exception("Segment $index out of range"))
 
         val outcome = audioDownloader.downloadSingleSegment(
             date = date,
@@ -256,7 +309,7 @@ class PodcastRepository @Inject constructor(
             onProgress = onProgress
         )
 
-        return when (outcome) {
+        when (outcome) {
             is SegmentDownloadOutcome.Success -> {
                 val merged = segments.toMutableList().apply {
                     this[index] = this[index].copy(actualDurationMs = outcome.actualDurationMs)
@@ -354,6 +407,27 @@ class PodcastRepository @Inject constructor(
     fun parseSegments(json: String): List<Segment> {
         val type = object : TypeToken<List<Segment>>() {}.type
         return gson.fromJson(json, type) ?: emptyList()
+    }
+
+    private fun mergeDownloadedMetadata(
+        freshSegments: List<Segment>,
+        existingSegments: List<Segment>
+    ): List<Segment> {
+        if (existingSegments.isEmpty()) return freshSegments
+
+        val existingByUrl = existingSegments.associateBy { it.audioUrl }
+        return freshSegments.map { fresh ->
+            val existing = existingByUrl[fresh.audioUrl]
+                ?: existingSegments.firstOrNull {
+                    it.pubDate == fresh.pubDate && it.title == fresh.title
+                }
+            val actualDurationMs = existing?.actualDurationMs ?: 0L
+            if (actualDurationMs > 0) {
+                fresh.copy(actualDurationMs = actualDurationMs)
+            } else {
+                fresh
+            }
+        }
     }
 
     private fun groupItemsByDate(items: List<RssItem>): Map<String, List<RssItem>> {

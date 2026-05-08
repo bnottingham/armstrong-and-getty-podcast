@@ -41,7 +41,7 @@ data class PlaybackState(
 
 @Singleton
 class PlaybackController @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     companion object {
         /** Key used on [MediaMetadata.extras] to carry the remote (streaming) URL
@@ -62,6 +62,8 @@ class PlaybackController @Inject constructor(
     private var segmentDurations: List<Long> = emptyList()
     /** Cumulative start times: `segmentStartMs[i]` = sum of durations `[0..i-1]`. */
     private var segmentStartMs: List<Long> = emptyList()
+    /** Maps player window index back to the source segment index for partial/live playlists. */
+    private var playlistSegmentIndices: List<Int> = emptyList()
 
     fun connect() {
         if (controllerFuture != null) return
@@ -98,14 +100,16 @@ class PlaybackController @Inject constructor(
         segmentFilePaths: List<String>,
         segmentTitles: List<String>,
         remoteUrls: List<String>,
+        segmentIndices: List<Int>,
         actualDurations: List<Long>,
         startPositionMs: Long = 0L,
         autoPlay: Boolean = true
     ) {
         val ctrl = controller ?: return
         currentDayDate = dayDate
-        segmentDurations = actualDurations
-        segmentStartMs = cumulativeStarts(actualDurations)
+        segmentDurations = segmentFilePaths.indices.map { actualDurations.getOrElse(it) { 0L } }
+        segmentStartMs = cumulativeStarts(segmentDurations)
+        playlistSegmentIndices = segmentFilePaths.indices.map { segmentIndices.getOrElse(it) { it } }
 
         val mediaItems = segmentFilePaths.mapIndexed { index, path ->
             buildMediaItem(
@@ -134,19 +138,29 @@ class PlaybackController @Inject constructor(
 
     /** Append newly-downloaded segments for the currently-playing day without interrupting playback. */
     fun appendToPlaylist(
+        dayDate: String,
         dayTitle: String,
         newSegmentFilePaths: List<String>,
         newSegmentTitles: List<String>,
         newRemoteUrls: List<String>,
+        newSegmentIndices: List<Int>,
         newActualDurations: List<Long>
     ) {
         val ctrl = controller ?: return
+        if (currentDayDate != dayDate) return
+        val appendCount = minOf(
+            newSegmentFilePaths.size,
+            newSegmentIndices.size,
+            newActualDurations.size
+        )
+        if (appendCount <= 0) return
 
-        segmentDurations = segmentDurations + newActualDurations
+        segmentDurations = segmentDurations + newActualDurations.take(appendCount)
         segmentStartMs = cumulativeStarts(segmentDurations)
+        playlistSegmentIndices = playlistSegmentIndices + newSegmentIndices.take(appendCount)
 
         val existingCount = ctrl.mediaItemCount
-        val mediaItems = newSegmentFilePaths.mapIndexed { i, path ->
+        val mediaItems = newSegmentFilePaths.take(appendCount).mapIndexed { i, path ->
             buildMediaItem(
                 dayTitle = dayTitle,
                 segTitle = newSegmentTitles.getOrElse(i) { "Segment ${existingCount + i + 1}" },
@@ -191,6 +205,8 @@ class PlaybackController @Inject constructor(
         }
     }
 
+    fun loadedSegmentIndices(): List<Int> = playlistSegmentIndices
+
     fun pause() {
         controller?.pause()
     }
@@ -212,6 +228,7 @@ class PlaybackController @Inject constructor(
         currentDayDate = null
         segmentDurations = emptyList()
         segmentStartMs = emptyList()
+        playlistSegmentIndices = emptyList()
         updateState()
     }
 
@@ -223,8 +240,9 @@ class PlaybackController @Inject constructor(
 
     fun seekToSegment(segmentIndex: Int) {
         val ctrl = controller ?: return
-        if (segmentIndex in 0 until ctrl.mediaItemCount) {
-            ctrl.seekTo(segmentIndex, 0)
+        val windowIndex = playlistSegmentIndices.indexOf(segmentIndex)
+        if (windowIndex in 0 until ctrl.mediaItemCount) {
+            ctrl.seekTo(windowIndex, 0)
         }
     }
 
@@ -296,6 +314,7 @@ class PlaybackController @Inject constructor(
         val segIndex = ctrl.currentMediaItemIndex
         val posInSeg = ctrl.currentPosition.coerceAtLeast(0)
         val totalDuration = segmentDurations.sum().takeIf { it > 0 } ?: ctrl.duration.coerceAtLeast(0)
+        val originalSegmentIndex = playlistSegmentIndices.getOrElse(segIndex) { segIndex }
 
         _playbackState.value = PlaybackState(
             isPlaying = ctrl.isPlaying,
@@ -303,7 +322,7 @@ class PlaybackController @Inject constructor(
             durationMs = totalDuration,
             playbackSpeed = ctrl.playbackParameters.speed,
             currentDayDate = currentDayDate,
-            currentSegmentIndex = segIndex,
+            currentSegmentIndex = originalSegmentIndex,
             isReady = ctrl.playbackState == Player.STATE_READY || ctrl.playbackState == Player.STATE_BUFFERING
         )
     }

@@ -46,7 +46,7 @@ object AppModule {
             PodcastDatabase::class.java,
             "ag_podcast_db"
         )
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 

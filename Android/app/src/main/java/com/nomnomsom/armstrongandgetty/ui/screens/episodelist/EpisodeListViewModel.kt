@@ -21,12 +21,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 data class EpisodeListUiState(
     val days: List<PodcastDay> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null
+)
+
+private data class PlayableSegment(
+    val originalIndex: Int,
+    val segment: Segment,
+    val filePath: String
 )
 
 @HiltViewModel
@@ -49,11 +56,16 @@ class EpisodeListViewModel @Inject constructor(
 
     // One Job per in-flight day download so the user can cancel from the UI.
     private val downloadJobs = mutableMapOf<String, Job>()
+    private val liveSegmentCheckJobs = mutableMapOf<String, Job>()
 
     init {
         viewModelScope.launch {
             repository.observeAllDays().collect { days ->
                 _uiState.value = _uiState.value.copy(days = days)
+                val currentDate = playbackState.value.currentDayDate
+                if (currentDate != null) {
+                    days.find { it.date == currentDate }?.let { appendPlayableSegmentsToCurrentPlaylist(it) }
+                }
             }
         }
 
@@ -143,6 +155,8 @@ class EpisodeListViewModel @Inject constructor(
             }
             if (result.isFailure) {
                 Log.w(TAG, "Segment $index retry failed for $date: ${result.exceptionOrNull()?.message}")
+            } else {
+                repository.getDayByDate(date)?.let { appendPlayableSegmentsToCurrentPlaylist(it) }
             }
             // Clear in-flight state for this retry; the row will refresh from disk check.
             val current = _downloadProgress.value[date]
@@ -195,30 +209,65 @@ class EpisodeListViewModel @Inject constructor(
         // No state gate — a partial download (state can be DOWNLOADING / ERROR / NONE if the user
         // retried individual segments) is still playable as long as some segment files exist.
         // Files that are mid-write or missing are filtered below.
-        val segments = repository.parseSegments(day.segmentsJson)
-        if (segments.isEmpty()) return false
-        val allFilePaths = repository.getSegmentFilePaths(day.date, segments.size)
-
-        val inFlight = _downloadProgress.value[day.date]?.segmentsInProgress ?: emptySet()
-        val paired = segments.zip(allFilePaths).filterIndexed { index, (_, path) ->
-            // Currently-downloading files have non-zero size but partial bytes — exclude them so
-            // we don't hand ExoPlayer a half-written mp3.
-            index !in inFlight && java.io.File(path).exists() && java.io.File(path).length() > 0
-        }
-        if (paired.isEmpty()) return false
-        val (playableSegments, filePaths) = paired.unzip()
+        val playableSegments = playableSegmentsFor(day)
+        if (playableSegments.isEmpty()) return false
 
         playbackController.playPlaylist(
             dayDate = day.date,
             title = day.title,
-            segmentFilePaths = filePaths,
-            segmentTitles = playableSegments.map { it.displayLabel },
-            remoteUrls = playableSegments.map { it.audioUrl },
-            actualDurations = playableSegments.map { it.effectiveDurationMs },
+            segmentFilePaths = playableSegments.map { it.filePath },
+            segmentTitles = playableSegments.map { it.segment.displayLabel },
+            remoteUrls = playableSegments.map { it.segment.audioUrl },
+            segmentIndices = playableSegments.map { it.originalIndex },
+            actualDurations = playableSegments.map { it.segment.effectiveDurationMs },
             startPositionMs = startPositionMs,
             autoPlay = autoPlay
         )
         return true
+    }
+
+    private fun playableSegmentsFor(day: PodcastDay): List<PlayableSegment> {
+        val segments = repository.parseSegments(day.segmentsJson)
+        if (segments.isEmpty()) return emptyList()
+
+        val inFlight = _downloadProgress.value[day.date]?.segmentsInProgress ?: emptySet()
+        val filePaths = repository.getSegmentFilePaths(day.date, segments.size)
+
+        return segments.mapIndexedNotNull { index, segment ->
+            val path = filePaths.getOrNull(index) ?: return@mapIndexedNotNull null
+            val file = File(path)
+            // Currently-downloading files may exist as .part files; final files are only promoted
+            // after a complete download, but the in-flight check also protects older installs.
+            if (index !in inFlight && file.isFile && file.length() > 0) {
+                PlayableSegment(index, segment, path)
+            } else {
+                null
+            }
+        }
+    }
+
+    private fun appendPlayableSegmentsToCurrentPlaylist(day: PodcastDay) {
+        if (playbackState.value.currentDayDate != day.date) return
+
+        val loadedIndices = playbackController.loadedSegmentIndices()
+        val maxLoadedIndex = loadedIndices.maxOrNull() ?: return
+        val segmentsToAppend = playableSegmentsFor(day)
+            .filter { it.originalIndex > maxLoadedIndex && it.originalIndex !in loadedIndices }
+            .sortedBy { it.originalIndex }
+
+        if (segmentsToAppend.isEmpty()) return
+
+        playbackController.appendToPlaylist(
+            dayDate = day.date,
+            dayTitle = day.title,
+            newSegmentFilePaths = segmentsToAppend.map { it.filePath },
+            newSegmentTitles = segmentsToAppend.map { it.segment.displayLabel },
+            newRemoteUrls = segmentsToAppend.map { it.segment.audioUrl },
+            newSegmentIndices = segmentsToAppend.map { it.originalIndex },
+            newActualDurations = segmentsToAppend.map { it.segment.effectiveDurationMs }
+        )
+
+        Log.d(TAG, "Appended ${segmentsToAppend.size} playable segment(s) to live playlist for ${day.date}")
     }
 
     fun togglePlayPause() = playbackController.togglePlayPause()
@@ -249,33 +298,25 @@ class EpisodeListViewModel @Inject constructor(
     }
 
     fun checkForNewSegments(date: String) {
-        viewModelScope.launch {
-            val dayBefore = repository.getDayByDate(date) ?: return@launch
-            val previousSegmentCount = repository.parseSegments(dayBefore.segmentsJson).size
+        if (downloadJobs[date]?.isActive == true || liveSegmentCheckJobs[date]?.isActive == true) return
 
-            val result = repository.appendNewSegments(date)
-
-            if (result.isSuccess && playbackState.value.currentDayDate == date) {
-                val updatedDay = repository.getDayByDate(date) ?: return@launch
-                val updatedSegments = repository.parseSegments(updatedDay.segmentsJson)
-
-                if (updatedSegments.size > previousSegmentCount) {
-                    val newSegments = updatedSegments.subList(previousSegmentCount, updatedSegments.size)
-                    val allFilePaths = repository.getSegmentFilePaths(date, updatedSegments.size)
-                    val newFilePaths = allFilePaths.subList(previousSegmentCount, allFilePaths.size)
-
-                    playbackController.appendToPlaylist(
-                        dayTitle = updatedDay.title,
-                        newSegmentFilePaths = newFilePaths,
-                        newSegmentTitles = newSegments.map { it.displayLabel },
-                        newRemoteUrls = newSegments.map { it.audioUrl },
-                        newActualDurations = newSegments.map { it.effectiveDurationMs }
-                    )
-
-                    Log.d(TAG, "Appended ${newSegments.size} new segment(s) to live playlist for $date")
+        val job = viewModelScope.launch {
+            try {
+                val result = repository.appendNewSegments(date) { progress ->
+                    _downloadProgress.value = _downloadProgress.value + (date to progress)
                 }
+                if (result.isFailure) {
+                    Log.w(TAG, "Live segment check failed for $date: ${result.exceptionOrNull()?.message}")
+                }
+
+                val updatedDay = repository.getDayByDate(date) ?: return@launch
+                appendPlayableSegmentsToCurrentPlaylist(updatedDay)
+            } finally {
+                _downloadProgress.value = _downloadProgress.value - date
             }
         }
+        liveSegmentCheckJobs[date] = job
+        job.invokeOnCompletion { liveSegmentCheckJobs.remove(date) }
     }
 
     override fun onCleared() {
