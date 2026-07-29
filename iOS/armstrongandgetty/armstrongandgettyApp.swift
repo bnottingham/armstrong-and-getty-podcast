@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import FirebaseCore
 import Shared
 
 struct ComposeView: UIViewControllerRepresentable {
@@ -20,6 +21,8 @@ struct ComposeView: UIViewControllerRepresentable {
 @main
 struct armstrongandgettyApp: App {
     init() {
+        FirebaseApp.configure()
+        AnalyticsBridgeKt.setAnalyticsTracker(tracker: FirebaseAnalyticsBridge())
         // BGTaskScheduler handlers must be registered before launch completes.
         BackgroundRefreshKt.registerBackgroundRefresh()
     }

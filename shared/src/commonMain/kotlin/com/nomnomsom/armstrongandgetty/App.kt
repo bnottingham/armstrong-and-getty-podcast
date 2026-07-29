@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -28,8 +29,10 @@ import com.nomnomsom.armstrongandgetty.ui.icons.AppIcons
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.ui.theme.AGPodcastTheme
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Cast button on Android (Chromecast), AirPlay route picker on iOS. */
@@ -45,6 +48,14 @@ fun App() {
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
+
+        val analytics: AnalyticsTracker = koinInject()
+        LaunchedEffect(currentRoute) {
+            when {
+                currentRoute == "episodes" -> analytics.logScreen("episodes")
+                currentRoute?.startsWith("player/") == true -> analytics.logScreen("player")
+            }
+        }
 
         val isPlayerRoute = currentRoute?.startsWith("player/") == true
 

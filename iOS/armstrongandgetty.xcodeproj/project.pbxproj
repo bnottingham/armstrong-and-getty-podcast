@@ -76,6 +76,7 @@
 				8B36C2AD30198E3600B3DF93 /* Sources */,
 				8B36C2AE30198E3600B3DF93 /* Frameworks */,
 				8B36C2AF30198E3600B3DF93 /* Resources */,
+				8B36C2C830198E3600B3DF93 /* Upload Crashlytics dSYMs */,
 			);
 			buildRules = (
 			);
@@ -86,6 +87,8 @@
 			);
 			name = armstrongandgetty;
 			packageProductDependencies = (
+				8B36C2C630198E3600B3DF93 /* FirebaseAnalytics */,
+				8B36C2C730198E3600B3DF93 /* FirebaseCrashlytics */,
 			);
 			productName = armstrongandgetty;
 			productReference = 8B36C2B130198E3600B3DF93 /* armstrongandgetty.app */;
@@ -114,6 +117,9 @@
 				Base,
 			);
 			mainGroup = 8B36C2A830198E3600B3DF93;
+			packageReferences = (
+				8B36C2C530198E3600B3DF93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8B36C2B230198E3600B3DF93 /* Products */;
@@ -145,6 +151,28 @@
 			shellPath = /bin/sh;
 			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\nif [ -z \"$JAVA_HOME\" ]; then\n  export JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || true)\nfi\ncd \"$SRCROOT/..\"\n./scripts/fetch_cast_sdk.sh\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
 		};
+		8B36C2C830198E3600B3DF93 /* Upload Crashlytics dSYMs */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			name = "Upload Crashlytics dSYMs";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -166,6 +194,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8B36C2C530198E3600B3DF93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.17.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8B36C2C630198E3600B3DF93 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B36C2C530198E3600B3DF93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		8B36C2C730198E3600B3DF93 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B36C2C530198E3600B3DF93 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		8B36C2BA30198E3700B3DF93 /* Debug */ = {

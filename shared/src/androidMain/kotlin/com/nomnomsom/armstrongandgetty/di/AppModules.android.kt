@@ -2,6 +2,8 @@ package com.nomnomsom.armstrongandgetty.di
 
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
+import com.nomnomsom.armstrongandgetty.analytics.FirebaseAnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.media.Media3PlatformPlayer
@@ -27,4 +29,6 @@ actual fun platformModule(): Module = module {
     single { UserDeletionTracker(androidContext()) }
 
     single<PlatformPlayer> { Media3PlatformPlayer(androidContext()) }
+
+    single<AnalyticsTracker> { FirebaseAnalyticsTracker(androidContext()) }
 }

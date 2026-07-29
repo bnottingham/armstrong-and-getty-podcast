@@ -79,6 +79,10 @@ kotlin {
             // Chromecast button in the shared top bar
             implementation(libs.play.services.cast.framework)
             implementation(libs.androidx.mediarouter)
+            // Firebase Analytics + Crashlytics (config json lives in androidApp)
+            implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.firebase.analytics)
+            implementation(libs.firebase.crashlytics)
         }
 
         iosMain.dependencies {

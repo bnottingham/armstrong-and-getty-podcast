@@ -3,6 +3,8 @@ package com.nomnomsom.armstrongandgetty.di
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsBridgeHolder
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.media.AvPlatformPlayer
@@ -37,4 +39,6 @@ actual fun platformModule(): Module = module {
     single { UserDeletionTracker() }
 
     single<PlatformPlayer> { CastAwarePlatformPlayer(AvPlatformPlayer()) }
+
+    single<AnalyticsTracker> { AnalyticsBridgeHolder.tracker }
 }

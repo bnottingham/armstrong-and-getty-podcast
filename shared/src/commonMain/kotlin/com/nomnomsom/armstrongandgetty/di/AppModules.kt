@@ -17,7 +17,7 @@ import org.koin.dsl.module
 
 /**
  * Platform module supplies: RoomDatabase.Builder<PodcastDatabase>, the HttpClient
- * (with a platform engine), UserDeletionTracker, and PlatformPlayer.
+ * (with a platform engine), UserDeletionTracker, PlatformPlayer, and AnalyticsTracker.
  */
 expect fun platformModule(): Module
 
@@ -44,5 +44,5 @@ val commonModule = module {
 
     single { PlaybackController(get()) }
 
-    viewModel { EpisodeListViewModel(get(), get()) }
+    viewModel { EpisodeListViewModel(get(), get(), get()) }
 }
