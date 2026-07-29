@@ -105,8 +105,12 @@ class NewEpisodeCheckWorker(
                         Log.d(TAG, "Auto-downloading new episode: ${day.date}")
                         repository.downloadDay(day.date)
                     }
-                } else if (hasNewSegments && day.state == DownloadState.DOWNLOADED) {
-                    Log.d(TAG, "Auto-downloading new segments for: ${day.date}")
+                } else if (day.state == DownloadState.DOWNLOADED &&
+                    (hasNewSegments || !repository.hasAllSegmentsOnDisk(day.date, day.segmentCount))
+                ) {
+                    // Missing files without count growth = an earlier append failed or was
+                    // interrupted; appendNewSegments re-fetches whatever isn't on disk.
+                    Log.d(TAG, "Auto-downloading new/missing segments for: ${day.date}")
                     repository.appendNewSegments(day.date)
                 }
             }

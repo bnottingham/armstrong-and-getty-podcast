@@ -6,6 +6,7 @@ import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
 import com.nomnomsom.armstrongandgetty.util.parseDayKey
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
 import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.format.Padding
@@ -46,25 +47,29 @@ object EpisodeAssembler {
     /**
      * Order a day's items chronologically and label each with its hour number
      * ("1".."4", "OMT", or a positional fallback).
+     *
+     * Ordering: pubDate first; ties (weekend shows publish both hours with one
+     * timestamp) break on the hour number in the title; remaining ties keep upload
+     * order (the feed is newest-first, so reversed feed order is chronological).
      */
     fun buildSegments(dayItems: List<RssItem>): List<Segment> {
-        return dayItems.mapIndexed { index, item ->
-            val hourLabel = extractHourLabel(item.title, index + 1)
-            Segment(
-                hour = hourLabel,
-                title = item.title,
-                description = item.description,
-                durationMs = item.durationSeconds * 1000,
-                audioUrl = item.audioUrl,
-                pubDate = item.pubDate
+        return dayItems.asReversed()
+            .sortedWith(
+                compareBy(
+                    { item -> parseRssPubDateMs(item.pubDate) },
+                    { item -> explicitHourNumber(item.title) ?: Int.MAX_VALUE }
+                )
             )
-        }.sortedBy { seg ->
-            parseRssPubDateMs(seg.pubDate)
-        }.mapIndexed { index, seg ->
-            val hourLabel = if (seg.hour == "OMT") "OMT"
-            else extractHourLabel(seg.title, index + 1)
-            seg.copy(hour = hourLabel)
-        }
+            .mapIndexed { index, item ->
+                Segment(
+                    hour = extractHourLabel(item.title, index + 1),
+                    title = item.title,
+                    description = item.description,
+                    durationMs = item.durationSeconds * 1000,
+                    audioUrl = item.audioUrl,
+                    pubDate = item.pubDate
+                )
+            }
     }
 
     /** Carry measured (on-disk) durations from previously-stored segments onto fresh ones. */
@@ -89,10 +94,23 @@ object EpisodeAssembler {
         }
     }
 
+    // The live feed writes hour markers three ways: "Hour 3", "Hr 1", and spelled out
+    // ("The Best Weekend Talk Show In America (Hour Two)" — the dominant weekend form).
+    private val digitHourPattern = Regex("""\b(?:hour|hr)\.?\s*(\d+)\b""", RegexOption.IGNORE_CASE)
+    private val spelledHourPattern =
+        Regex("""\b(?:hour|hr)\s+(one|two|three|four|five|six)\b""", RegexOption.IGNORE_CASE)
+    private val spelledNumbers =
+        mapOf("one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6)
+
+    /** The hour number explicitly present in [title], or null if the title carries none. */
+    fun explicitHourNumber(title: String): Int? {
+        digitHourPattern.find(title)?.let { return it.groupValues[1].toIntOrNull() }
+        spelledHourPattern.find(title)?.let { return spelledNumbers[it.groupValues[1].lowercase()] }
+        return null
+    }
+
     fun extractHourLabel(title: String, fallbackIndex: Int): String {
-        val hourPattern = Regex("Hour\\s+(\\d+)", RegexOption.IGNORE_CASE)
-        val match = hourPattern.find(title)
-        if (match != null) return match.groupValues[1]
+        explicitHourNumber(title)?.let { return it.toString() }
 
         if (title.contains("One More Thing", ignoreCase = true) ||
             title.contains("OMT", ignoreCase = true)
@@ -104,15 +122,25 @@ object EpisodeAssembler {
     }
 
     /**
-     * A day is "complete" when no more segments are expected: any past day, or today once
-     * four numbered hours exist. Incomplete days are the ones the live-append machinery
-     * keeps polling.
+     * A day is "complete" when no more segments are expected. Incomplete days are the
+     * ones the live-append machinery keeps polling.
+     *
+     * Past days are done. Future-dated days are still growing — late-evening interviews
+     * carry pubDates past UTC midnight, landing on a key the next morning's hours will
+     * join. Today needs four numbered hours on weekdays; the weekend show is only two.
+     * [today] must be the UTC date, matching the UTC-derived day keys.
      */
     fun isDayComplete(date: String, segments: List<Segment>, today: LocalDate): Boolean {
-        if (date != today.toString()) return true
+        val dayDate = parseDayKey(date) ?: return true
+        if (dayDate < today) return true
+        if (dayDate > today) return false
 
+        val requiredHours = when (dayDate.dayOfWeek) {
+            DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> 2
+            else -> 4
+        }
         val hourSegments = segments.count { it.hour.toIntOrNull() != null }
-        return hourSegments >= 4
+        return hourSegments >= requiredHours
     }
 
     fun formatDayTitle(date: String): String {

@@ -39,8 +39,11 @@ class PodcastRepository(
     private val rssFeedParser: FeedSource,
     private val audioDownloader: SegmentStore,
     private val deletionTracker: DeletionMarks,
+    // UTC, not the device zone: day keys are UTC dates, and completeness compares
+    // against this. A device-local "today" prematurely completes the current day for
+    // users east of UTC while segments are still being published.
     private val todayProvider: () -> LocalDate = {
-        Clock.System.todayIn(TimeZone.currentSystemDefault())
+        Clock.System.todayIn(TimeZone.UTC)
     }
 ) {
     companion object {
@@ -60,6 +63,9 @@ class PodcastRepository(
     // segment files at a time.
     private val dayDownloadLocksGuard = Mutex()
     private val dayDownloadLocks = mutableMapOf<String, Mutex>()
+
+    /** Today's day key (UTC) — the key the currently-airing show groups under. */
+    fun todayKey(): String = todayProvider().toString()
 
     fun isUserDeleted(date: String): Boolean = deletionTracker.isDeleted(date)
 
@@ -247,7 +253,11 @@ class PodcastRepository(
             ?: return@withDayDownloadLock Result.failure(Exception("Day not found after refresh"))
         val updatedSegments = parseSegments(updatedDay.segmentsJson)
 
-        if (updatedSegments.size <= previousSegmentCount) {
+        // Disk truth, not count growth: any earlier refresh (app-open, worker, background)
+        // already recorded new segments in the row without downloading them, and a failed
+        // append leaves known-but-missing files behind. Fetch whatever is missing.
+        val missingBefore = audioDownloader.missingSegmentIndices(date, updatedSegments.size)
+        if (missingBefore.isEmpty()) {
             return@withDayDownloadLock Result.success(
                 LiveSegmentAppendResult(date, previousSegmentCount, emptyList())
             )
@@ -262,8 +272,7 @@ class PodcastRepository(
             isComplete = updatedDay.isComplete
         )
 
-        val newRange = previousSegmentCount until updatedSegments.size
-        val appendedIndices = newRange.filter { audioDownloader.hasSegment(date, it) }
+        val appendedIndices = missingBefore.filter { audioDownloader.hasSegment(date, it) }.sorted()
         if (appendedIndices.isNotEmpty()) {
             return@withDayDownloadLock Result.success(
                 LiveSegmentAppendResult(date, previousSegmentCount, appendedIndices)
@@ -272,7 +281,7 @@ class PodcastRepository(
 
         val firstNewFailure = outcomes
             .filterIsInstance<SegmentDownloadOutcome.Failure>()
-            .firstOrNull { it.index in newRange }
+            .firstOrNull { it.index in missingBefore }
 
         if (firstNewFailure != null) {
             Result.failure(firstNewFailure.error)
@@ -353,13 +362,29 @@ class PodcastRepository(
         summary: String,
         isComplete: Boolean
     ) {
+        // A refresh may have recorded new segments while a long download held this day's
+        // lock; [merged] was captured before the download started. Never shrink the row —
+        // overlay the measured durations onto the current segment list instead.
+        val currentDay = dao.getDayByDate(date)
+        val currentSegments = currentDay?.let { parseSegments(it.segmentsJson) } ?: emptyList()
+        val (finalSegments, finalSummary, finalIsComplete) =
+            if (currentSegments.size > merged.size) {
+                Triple(
+                    EpisodeAssembler.mergeDownloadedMetadata(currentSegments, merged),
+                    currentDay!!.summary,
+                    currentDay.isComplete
+                )
+            } else {
+                Triple(merged, summary, isComplete)
+            }
+
         dao.updateSegments(
             date = date,
-            segmentsJson = json.encodeToString(merged),
-            totalDurationMs = merged.sumOf { it.effectiveDurationMs },
-            segmentCount = merged.size,
-            summary = summary,
-            isComplete = isComplete,
+            segmentsJson = json.encodeToString(finalSegments),
+            totalDurationMs = finalSegments.sumOf { it.effectiveDurationMs },
+            segmentCount = finalSegments.size,
+            summary = finalSummary,
+            isComplete = finalIsComplete,
             lastUpdated = nowMs()
         )
     }

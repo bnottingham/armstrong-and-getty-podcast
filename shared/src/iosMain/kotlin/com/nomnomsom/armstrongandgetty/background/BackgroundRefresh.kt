@@ -105,8 +105,10 @@ private fun handleRefresh(task: BGAppRefreshTask) {
                             repository.downloadDay(day.date)
                         }
                     }
-                    day.segmentCount > previousCount && day.state == DownloadState.DOWNLOADED -> {
-                        AppLog.d(TAG, "Auto-downloading new segments for: ${day.date}")
+                    day.state == DownloadState.DOWNLOADED &&
+                        (day.segmentCount > previousCount ||
+                            !repository.hasAllSegmentsOnDisk(day.date, day.segmentCount)) -> {
+                        AppLog.d(TAG, "Auto-downloading new/missing segments for: ${day.date}")
                         repository.appendNewSegments(day.date)
                     }
                 }

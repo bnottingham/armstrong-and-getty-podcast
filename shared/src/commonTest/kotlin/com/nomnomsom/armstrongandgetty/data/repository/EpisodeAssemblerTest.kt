@@ -91,6 +91,28 @@ class EpisodeAssemblerTest {
         assertEquals("3", segments[0].hour)
     }
 
+    /** All three hour-marker styles seen in the live feed must resolve. */
+    @Test
+    fun hourMarkersInAllRealFeedStylesAreUnderstood() {
+        assertEquals("2", EpisodeAssembler.extractHourLabel("The Best Weekend Talk Show In America (Hour Two)", 9))
+        assertEquals("1", EpisodeAssembler.extractHourLabel("The Best Weekend Talk Show:  Hour One", 9))
+        assertEquals("1", EpisodeAssembler.extractHourLabel("The Best Weekend Talk Show In America Hr 1", 9))
+        assertEquals("4", EpisodeAssembler.extractHourLabel("The A&G Replay Monday Hour Four", 9))
+        assertEquals("3", EpisodeAssembler.extractHourLabel("The A&G Replay Monday Hour 3", 9))
+        // No marker → positional fallback
+        assertEquals("9", EpisodeAssembler.extractHourLabel("Fauci Is Guilty of Everything!!!", 9))
+    }
+
+    /** Weekend hours with distinct pubDates (June pattern) already order correctly. */
+    @Test
+    fun weekendHoursWithDistinctPubDatesOrderByTime() {
+        val hourOne = rssItem("The Best Weekend Talk Show In America Hour One", "Sat, 21 Jun 2026 01:58:16 +0000")
+        val hourTwo = rssItem("The Best Weekend Talk Show In America Hour Two", "Sat, 21 Jun 2026 02:00:47 +0000")
+        val segments = EpisodeAssembler.buildSegments(listOf(hourTwo, hourOne)) // feed order: newest first
+        assertEquals(listOf("1", "2"), segments.map { it.hour })
+        assertEquals(hourOne.title, segments[0].title)
+    }
+
     // ---- merge of downloaded metadata ----
 
     @Test
@@ -132,18 +154,28 @@ class EpisodeAssemblerTest {
         assertTrue(EpisodeAssembler.isDayComplete(BurstDay.DATE, segments, today))
     }
 
-    /**
-     * Documents current behavior: a 2-hour weekend day never reaches the 4-hour bar, so
-     * it stays "incomplete" its whole calendar day and the player polls it fruitlessly
-     * every 2 minutes. Harmless but noisy — see report.
-     */
     @Test
-    fun weekendDayNeverCompletesOnItsOwnDay_documentedQuirk() {
+    fun weekendDayCompletesWithTwoHours() {
         val segments = listOf(
             Segment("1", "Hour One", "", 0, "u1", "Sat, 25 Jul 2026 07:00:00 +0000"),
             Segment("2", "Hour Two", "", 0, "u2", "Sat, 25 Jul 2026 07:00:00 +0000")
         )
+        assertTrue(EpisodeAssembler.isDayComplete("2026-07-25", segments, LocalDate(2026, 7, 25)))
+    }
+
+    @Test
+    fun weekendDayWithOneHourIsIncomplete() {
+        val segments = listOf(
+            Segment("1", "Hour One", "", 0, "u1", "Sat, 25 Jul 2026 07:00:00 +0000")
+        )
         assertFalse(EpisodeAssembler.isDayComplete("2026-07-25", segments, LocalDate(2026, 7, 25)))
+    }
+
+    /** Late-evening interviews land on tomorrow's UTC key; that day is still growing. */
+    @Test
+    fun futureDatedStrayDayIsIncomplete() {
+        val segments = EpisodeAssembler.buildSegments(StrayEveningItems.items)
+        assertFalse(EpisodeAssembler.isDayComplete("2026-07-08", segments, LocalDate(2026, 7, 7)))
     }
 
     // ---- titles / summary ----

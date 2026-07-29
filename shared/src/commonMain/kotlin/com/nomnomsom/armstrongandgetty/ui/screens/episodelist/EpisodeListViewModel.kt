@@ -32,6 +32,25 @@ data class EpisodeListUiState(
     val error: String? = null
 )
 
+/**
+ * Whether playback position counts as "finished the episode". Being within 5s of the
+ * end of the LOADED playlist is not enough: at the live frontier the loaded playlist
+ * ends long before the episode does (hour 2 isn't out yet), and marking the day
+ * listened there makes the next play restart from zero and wipe progress. The day must
+ * also be complete, with every known segment loaded.
+ */
+internal fun shouldMarkListened(
+    positionMs: Long,
+    durationMs: Long,
+    dayIsComplete: Boolean,
+    daySegmentCount: Int,
+    loadedSegmentCount: Int
+): Boolean {
+    if (durationMs <= 0) return false
+    val nearEnd = positionMs >= durationMs - 5000
+    return nearEnd && dayIsComplete && loadedSegmentCount >= daySegmentCount
+}
+
 private data class PlayableSegment(
     val originalIndex: Int,
     val segment: Segment,
@@ -85,19 +104,27 @@ class EpisodeListViewModel(
                 val latestDate = result.getOrThrow()
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
 
-                val latestDay = repository.getDayByDate(latestDate)
-                if (latestDay != null && !repository.isUserDeleted(latestDate)) {
-                    when (latestDay.state) {
-                        DownloadState.NONE -> autoDownload(latestDate)
+                // Manage today's day as well as the newest one: late-evening interviews
+                // carry pubDates past UTC midnight and form a later-dated card, which
+                // would otherwise steal "latest" and orphan the day still being aired.
+                val todayKey = repository.todayKey()
+                val candidateDates =
+                    if (todayKey != latestDate) listOf(latestDate, todayKey) else listOf(latestDate)
+
+                for (date in candidateDates) {
+                    val day = repository.getDayByDate(date) ?: continue
+                    if (repository.isUserDeleted(date)) continue
+                    when (day.state) {
+                        DownloadState.NONE -> autoDownload(date)
                         DownloadState.DOWNLOADED -> {
-                            val segments = repository.parseSegments(latestDay.segmentsJson)
+                            val segments = repository.parseSegments(day.segmentsJson)
                             when {
-                                !latestDay.isComplete -> checkForNewSegments(latestDate)
+                                !day.isComplete -> checkForNewSegments(date)
                                 // A complete day can still be missing files if OMT was added after initial download.
-                                !repository.hasAllSegmentsOnDisk(latestDate, segments.size) -> autoDownload(latestDate)
+                                !repository.hasAllSegmentsOnDisk(date, segments.size) -> autoDownload(date)
                             }
                         }
-                        DownloadState.ERROR -> autoDownload(latestDate)
+                        DownloadState.ERROR -> autoDownload(date)
                         DownloadState.DOWNLOADING -> Unit
                     }
                 }
@@ -332,7 +359,18 @@ class EpisodeListViewModel(
         // Don't overwrite real progress with 0 during player state transitions.
         if (state.currentPositionMs <= 0) return
 
-        val isListened = state.currentPositionMs >= state.durationMs - 5000
+        val day = _uiState.value.days.find { it.date == date }
+        val isListened = if (day == null) {
+            state.currentPositionMs >= state.durationMs - 5000
+        } else {
+            shouldMarkListened(
+                positionMs = state.currentPositionMs,
+                durationMs = state.durationMs,
+                dayIsComplete = day.isComplete,
+                daySegmentCount = day.segmentCount,
+                loadedSegmentCount = playbackController.loadedSegmentIndices().size
+            )
+        }
 
         // NonCancellable so the DB write completes during onCleared() when viewModelScope is cancelling.
         viewModelScope.launch {
