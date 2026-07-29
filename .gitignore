@@ -120,3 +120,6 @@ Packages/
 # Claude worktrees
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+
+# JVM heap dumps
+*.hprof
