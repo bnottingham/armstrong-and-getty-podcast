@@ -32,7 +32,8 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Fetch Google Cast SDK (cinterop dependency, gitignored)
-        run: "./Native Mobile/scripts/fetch_cast_sdk.sh"
+        working-directory: Native Mobile
+        run: ./scripts/fetch_cast_sdk.sh
       - name: Run shared tests (iosSimulatorArm64Test)
         working-directory: Native Mobile
         run: ./gradlew :shared:iosSimulatorArm64Test
