@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.google.services)
 }
 
 android {
@@ -79,9 +78,6 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
 
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.functions)
-
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
@@ -100,9 +96,6 @@ dependencies {
     // Coroutines-Guava bridge (for MediaLibraryService async callbacks)
     implementation(libs.kotlinx.coroutines.guava)
     implementation(libs.kotlinx.coroutines.play.services)
-
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

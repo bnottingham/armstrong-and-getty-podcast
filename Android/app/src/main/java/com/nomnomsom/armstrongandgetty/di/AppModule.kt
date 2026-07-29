@@ -2,7 +2,6 @@ package com.nomnomsom.armstrongandgetty.di
 
 import android.content.Context
 import androidx.room.Room
-import com.google.firebase.functions.FirebaseFunctions
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
@@ -38,10 +37,6 @@ object AppModule {
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
     }
-
-    @Provides
-    @Singleton
-    fun provideFirebaseFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance("us-central1")
 
     @Provides
     @Singleton

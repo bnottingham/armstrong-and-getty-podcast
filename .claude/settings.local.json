@@ -26,7 +26,9 @@
       "Bash(curl -v -L -A \"ArmstrongGettyPodcast/1.0\" -o /dev/null -r 0-131071 --max-time 60 \"https://podtrac.com/pts/redirect.mp3/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/06b6b2f0-6a7f-4476-9292-b42e00ebaf7d/audio.mp3?utm_source=Podcast&in_playlist=4db37684-c7ed-4964-843c-ae3900375fd7\")",
       "Bash(time curl *)",
       "Bash(curl -sIL -A \"ArmstrongGettyPodcast/1.0\" --max-time 30 \"https://podtrac.com/pts/redirect.mp3/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/06b6b2f0-6a7f-4476-9292-b42e00ebaf7d/audio.mp3?utm_source=Podcast&in_playlist=4db37684-c7ed-4964-843c-ae3900375fd7\")",
-      "Bash(wait)"
+      "Bash(wait)",
+      "Bash(firebase --version)",
+      "Bash(firebase projects:list)"
     ]
   }
 }
