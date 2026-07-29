@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "816792233694",
+    "project_id": "armstrong-and-getty-app-d67a4",
+    "storage_bucket": "armstrong-and-getty-app-d67a4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816792233694:android:f26c55763ec6c3d885044f",
+        "android_client_info": {
+          "package_name": "com.nomnomsom.armstrongandgetty"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "816792233694-357l4510ustkr2ama24pa9l5jfjbbcre.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nomnomsom.armstrongandgetty",
+            "certificate_hash": "c735e11204c40f97af0fe800d4ccb1633aaeabe3"
+          }
+        },
+        {
+          "client_id": "816792233694-0q70jdr5218aa8tjvfra0lpgp1esqn2v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuXA8oGFLRSSj9aqSSskJ0SNq0aufJkjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "816792233694-0q70jdr5218aa8tjvfra0lpgp1esqn2v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "816792233694-4nh7p28ffuosa22flk5l8qevqksl7k39.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "nomnomsom.armstrongandgetty"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

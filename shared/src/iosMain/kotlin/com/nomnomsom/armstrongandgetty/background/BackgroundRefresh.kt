@@ -1,5 +1,7 @@
 package com.nomnomsom.armstrongandgetty.background
 
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.state
@@ -69,6 +71,7 @@ private fun handleRefresh(task: BGAppRefreshTask) {
     // A background launch never builds the UI, so Koin may not be up yet.
     ensureKoinStarted()
     val repository = KoinPlatform.getKoin().get<PodcastRepository>()
+    val analytics = KoinPlatform.getKoin().get<AnalyticsTracker>()
 
     val job = scope.launch {
         try {
@@ -77,10 +80,18 @@ private fun handleRefresh(task: BGAppRefreshTask) {
             val refreshResult = repository.refreshFeed()
             if (refreshResult.isFailure) {
                 AppLog.w(TAG, "Feed refresh failed: ${refreshResult.exceptionOrNull()?.message}")
+                analytics.logEvent(
+                    AnalyticsEvents.BACKGROUND_REFRESH,
+                    mapOf(AnalyticsEvents.PARAM_RESULT to "failed")
+                )
                 task.setTaskCompletedWithSuccess(false)
                 return@launch
             }
 
+            analytics.logEvent(
+                AnalyticsEvents.BACKGROUND_REFRESH,
+                mapOf(AnalyticsEvents.PARAM_RESULT to "success")
+            )
             notifyIfNewContent(daysBefore, repository.getAllDaysSnapshot())
 
             for (day in repository.getAllDaysSnapshot()) {
