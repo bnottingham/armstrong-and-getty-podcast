@@ -19,6 +19,7 @@ import googlecast.GCKRemoteMediaClientListenerProtocol
 import googlecast.GCKSession
 import googlecast.GCKSessionManager
 import googlecast.GCKSessionManagerListenerProtocol
+import googlecast.kGCKMediaQueueInvalidItemID
 import googlecast.kGCKMetadataKeyAlbumTitle
 import googlecast.kGCKMetadataKeyArtist
 import googlecast.kGCKMetadataKeyTitle
@@ -209,8 +210,13 @@ class CastAwarePlatformPlayer(
     override fun addItems(items: List<PlayerItem>) {
         this.items = this.items + items
         local.addItems(items)
-        // Receiver-side append is skipped: live-day appends mid-cast are re-synced on the
-        // next setItems or session change. (Rare path; keeps the queue logic simple.)
+        if (casting) {
+            // Append live-day segments to the receiver queue in place.
+            remoteClient?.queueInsertItems(
+                items.map { it.toQueueItem() },
+                beforeItemWithID = kGCKMediaQueueInvalidItemID
+            )
+        }
     }
 
     override fun clearItemsAndStop() {
