@@ -9,32 +9,20 @@
 /* Begin PBXFileReference section */
 		8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/GoogleCast.xcframework; sourceTree = "<group>"; };
 		8B36C2B130198E3600B3DF93 /* armstrongandgetty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = armstrongandgetty.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B36C2D130198E3600B3DF93 /* armstrongandgettyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = armstrongandgettyApp.swift; sourceTree = "<group>"; };
+		8B36C2D230198E3600B3DF93 /* FirebaseBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseBridge.swift; sourceTree = "<group>"; };
+		8B36C2D330198E3600B3DF93 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8B36C2D430198E3600B3DF93 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		8B36C2D530198E3600B3DF93 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		8B36C2C230198E3600B3DF93 /* Exceptions for "armstrongandgetty" folder in "armstrongandgetty" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 8B36C2B030198E3600B3DF93 /* armstrongandgetty */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXBuildFile section */
 		8B36C2C430198E3600B3DF93 /* GoogleCast.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */; };
+		8B36C2D630198E3600B3DF93 /* armstrongandgettyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B36C2D130198E3600B3DF93 /* armstrongandgettyApp.swift */; };
+		8B36C2D730198E3600B3DF93 /* FirebaseBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B36C2D230198E3600B3DF93 /* FirebaseBridge.swift */; };
+		8B36C2D830198E3600B3DF93 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8B36C2D330198E3600B3DF93 /* Assets.xcassets */; };
+		8B36C2D930198E3600B3DF93 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8B36C2D430198E3600B3DF93 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		8B36C2B330198E3600B3DF93 /* armstrongandgetty */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				8B36C2C230198E3600B3DF93 /* Exceptions for "armstrongandgetty" folder in "armstrongandgetty" target */,
-			);
-			path = armstrongandgetty;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		8B36C2AE30198E3600B3DF93 /* Frameworks */ = {
@@ -51,7 +39,11 @@
 		8B36C2A830198E3600B3DF93 = {
 			isa = PBXGroup;
 			children = (
-				8B36C2B330198E3600B3DF93 /* armstrongandgetty */,
+				8B36C2D130198E3600B3DF93 /* armstrongandgettyApp.swift */,
+				8B36C2D230198E3600B3DF93 /* FirebaseBridge.swift */,
+				8B36C2D330198E3600B3DF93 /* Assets.xcassets */,
+				8B36C2D430198E3600B3DF93 /* GoogleService-Info.plist */,
+				8B36C2D530198E3600B3DF93 /* Info.plist */,
 				8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */,
 				8B36C2B230198E3600B3DF93 /* Products */,
 			);
@@ -81,9 +73,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				8B36C2B330198E3600B3DF93 /* armstrongandgetty */,
 			);
 			name = armstrongandgetty;
 			packageProductDependencies = (
@@ -180,6 +169,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B36C2D830198E3600B3DF93 /* Assets.xcassets in Resources */,
+				8B36C2D930198E3600B3DF93 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -190,6 +181,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B36C2D630198E3600B3DF93 /* armstrongandgettyApp.swift in Sources */,
+				8B36C2D730198E3600B3DF93 /* FirebaseBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -355,7 +348,7 @@
 					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = armstrongandgetty/Info.plist;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -409,7 +402,7 @@
 					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = armstrongandgetty/Info.plist;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

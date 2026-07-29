@@ -26,4 +26,4 @@ rootProject.name = "ArmstrongAndGetty"
 include(":shared")
 // The Android app shell lives under Android/ to mirror the iOS/ wrapper layout.
 include(":androidApp")
-project(":androidApp").projectDir = file("Android/armstrongandgetty")
+project(":androidApp").projectDir = file("Android")
