@@ -32,6 +32,10 @@ class PlaybackController(
         /** Key used on Android MediaMetadata extras to carry the remote (streaming) URL
          *  so Cast can reach the audio when the local item uri is a `file://` path. */
         const val EXTRA_REMOTE_URL = "remote_url"
+
+        /** Companion key carrying the downloaded file's path, so the service can swap
+         *  back to local playback when a Cast session ends. */
+        const val EXTRA_LOCAL_PATH = "local_path"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)

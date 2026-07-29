@@ -9,6 +9,7 @@ import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -27,14 +28,37 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_LOCAL_PATH
 import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
+import java.io.File
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
 
     private var exoPlayer: ExoPlayer? = null
     private var castPlayer: CastPlayer? = null
+
+    /** The Cast player as handed to the session — wrapped with the seek bounds guard. */
+    private var castSessionPlayer: Player? = null
     private var mediaSession: MediaLibrarySession? = null
+
+    /**
+     * CastPlayer's timeline stays empty until the Cast receiver reports its queue back, and
+     * RemoteCastPlayer.seekTo indexes into that timeline without a bounds check — an
+     * index-based seek flushed from a controller's command queue during that window crashes
+     * with ArrayIndexOutOfBoundsException. Drop out-of-range index seeks instead.
+     */
+    private class BoundsCheckedPlayer(player: Player) : ForwardingPlayer(player) {
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            if (mediaItemIndex >= currentTimeline.windowCount) return
+            super.seekTo(mediaItemIndex, positionMs)
+        }
+
+        override fun seekToDefaultPosition(mediaItemIndex: Int) {
+            if (mediaItemIndex >= currentTimeline.windowCount) return
+            super.seekToDefaultPosition(mediaItemIndex)
+        }
+    }
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -58,7 +82,9 @@ class PlaybackService : MediaLibraryService() {
         // CastContext fails on devices without Google Play Services — fall back to ExoPlayer only.
         try {
             val castContext = CastContext.getSharedInstance(this)
-            castPlayer = CastPlayer(castContext)
+            val cast = CastPlayer(castContext)
+            castPlayer = cast
+            castSessionPlayer = BoundsCheckedPlayer(cast)
         } catch (_: Exception) {
         }
 
@@ -84,7 +110,7 @@ class PlaybackService : MediaLibraryService() {
 
         castPlayer?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
             override fun onCastSessionAvailable() {
-                switchToPlayer(castPlayer!!)
+                castSessionPlayer?.let { switchToPlayer(it) }
             }
 
             override fun onCastSessionUnavailable() {
@@ -93,30 +119,50 @@ class PlaybackService : MediaLibraryService() {
         })
     }
 
+    /**
+     * Rewrite an item's URI for the player that will actually play it: the Cast receiver
+     * can't reach file:// paths on the phone, and local playback should prefer the
+     * downloaded file over streaming. Both URLs ride in the item's metadata extras.
+     */
+    private fun resolveUriFor(item: MediaItem, forCast: Boolean): MediaItem {
+        val currentUri = item.localConfiguration?.uri ?: return item
+        val extras = item.mediaMetadata.extras
+        val targetUri = if (forCast) {
+            if (currentUri.scheme == "file") {
+                extras?.getString(EXTRA_REMOTE_URL)
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(Uri::parse) ?: currentUri
+            } else {
+                currentUri
+            }
+        } else {
+            extras?.getString(EXTRA_LOCAL_PATH)
+                ?.takeIf { File(it).length() > 0 }
+                ?.let { Uri.parse("file://$it") }
+                ?: currentUri
+        }
+        return if (targetUri == currentUri) {
+            item
+        } else {
+            item.buildUpon().setUri(targetUri).setMimeType(MimeTypes.AUDIO_MPEG).build()
+        }
+    }
+
+    private fun resolveUrisForActivePlayer(items: List<MediaItem>): List<MediaItem> {
+        val casting = mediaSession?.player === castSessionPlayer
+        return items.map { resolveUriFor(it, forCast = casting) }
+    }
+
     @OptIn(UnstableApi::class)
     private fun switchToPlayer(newPlayer: Player) {
         val session = mediaSession ?: return
         val oldPlayer = session.player
         if (oldPlayer === newPlayer) return
 
-        // CastPlayer can't stream file:// URIs, so swap in the original remote URL
-        // we stashed in the MediaItem's extras when handing off to CastPlayer.
+        val toCast = newPlayer === castSessionPlayer
         val mediaItems = mutableListOf<MediaItem>()
         for (i in 0 until oldPlayer.mediaItemCount) {
-            val oldItem = oldPlayer.getMediaItemAt(i)
-            val uri = oldItem.localConfiguration?.uri
-            val finalUri = if (uri?.scheme == "file") {
-                oldItem.mediaMetadata.extras?.getString(EXTRA_REMOTE_URL)?.let { Uri.parse(it) } ?: uri
-            } else {
-                uri
-            }
-
-            mediaItems.add(
-                oldItem.buildUpon()
-                    .setUri(finalUri)
-                    .setMimeType(MimeTypes.AUDIO_MPEG)
-                    .build()
-            )
+            mediaItems.add(resolveUriFor(oldPlayer.getMediaItemAt(i), forCast = toCast))
         }
 
         val currentWindowIndex = oldPlayer.currentMediaItemIndex
@@ -140,7 +186,8 @@ class PlaybackService : MediaLibraryService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Keep alive during active playback or an active Cast session; otherwise stop.
         val player = mediaSession?.player
-        if (player == null || (!player.playWhenReady && player !is CastPlayer)) {
+        val isCasting = player != null && player === castSessionPlayer
+        if (player == null || (!player.playWhenReady && !isCasting)) {
             stopSelf()
         }
     }
@@ -213,6 +260,39 @@ class PlaybackService : MediaLibraryService() {
                 .setAvailablePlayerCommands(playerCommands)
                 .setMediaButtonPreferences(mediaButtonPreferences)
                 .build()
+        }
+
+        /**
+         * Controllers always send items with file:// URIs (remote URL in extras). Resolve
+         * them here — the documented hook for rewriting playable URIs — so playlists set
+         * or appended WHILE a Cast session is active reach the receiver as streamable
+         * https URLs. Without this, the receiver's queue load fails silently and
+         * play() is a no-op.
+         */
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(
+                    resolveUrisForActivePlayer(mediaItems),
+                    startIndex,
+                    startPositionMs
+                )
+            )
+        }
+
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>
+        ): ListenableFuture<MutableList<MediaItem>> {
+            return Futures.immediateFuture(
+                resolveUrisForActivePlayer(mediaItems).toMutableList()
+            )
         }
 
         override fun onCustomCommand(

@@ -61,9 +61,11 @@ class Media3PlatformPlayer(
         autoPlay: Boolean
     ) {
         val ctrl = controller ?: return
-        ctrl.setMediaItems(items.map { it.toMediaItem() })
+        // Atomic set-with-start-position, NOT setMediaItems + seekTo: CastPlayer loads its
+        // receiver queue asynchronously, and an index seek that lands while its timeline is
+        // still empty crashes (CastTimeline has no bounds check).
+        ctrl.setMediaItems(items.map { it.toMediaItem() }, startWindow, startPositionMs)
         ctrl.prepare()
-        ctrl.seekTo(startWindow, startPositionMs)
         if (autoPlay) {
             ctrl.play()
         }
@@ -140,7 +142,12 @@ class Media3PlatformPlayer(
     }
 
     private fun PlayerItem.toMediaItem(): MediaItem {
-        val extras = Bundle().apply { putString(PlaybackController.EXTRA_REMOTE_URL, remoteUrl) }
+        // Both URLs ride along so PlaybackService can resolve the right one for whichever
+        // player is active (Cast needs the remote stream; local playback prefers the file).
+        val extras = Bundle().apply {
+            putString(PlaybackController.EXTRA_REMOTE_URL, remoteUrl)
+            putString(PlaybackController.EXTRA_LOCAL_PATH, filePath)
+        }
         return MediaItem.Builder()
             .setUri(Uri.parse("file://$filePath"))
             .setMimeType(MimeTypes.AUDIO_MPEG)
