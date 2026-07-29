@@ -1,0 +1,26 @@
+package com.nomnomsom.armstrongandgetty.data.local
+
+import platform.Foundation.NSUserDefaults
+
+actual class UserDeletionTracker {
+    private val defaults = NSUserDefaults.standardUserDefaults
+
+    actual fun isDeleted(date: String): Boolean = deletedDates().contains(date)
+
+    actual fun markDeleted(date: String) {
+        defaults.setObject((deletedDates() + date).toList(), KEY_DATES)
+    }
+
+    actual fun unmarkDeleted(date: String) {
+        defaults.setObject((deletedDates() - date).toList(), KEY_DATES)
+    }
+
+    private fun deletedDates(): Set<String> {
+        val stored = defaults.arrayForKey(KEY_DATES) ?: return emptySet()
+        return stored.filterIsInstance<String>().toSet()
+    }
+
+    private companion object {
+        const val KEY_DATES = "user_deletions_dates"
+    }
+}
