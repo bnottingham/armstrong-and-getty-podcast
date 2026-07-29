@@ -1,32 +1,26 @@
 package com.nomnomsom.armstrongandgetty.data.repository
 
+import com.nomnomsom.armstrongandgetty.data.local.DeletionMarks
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDayDao
-import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
-import com.nomnomsom.armstrongandgetty.data.model.RssItem
 import com.nomnomsom.armstrongandgetty.data.model.Segment
 import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.model.state
-import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
-import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
+import com.nomnomsom.armstrongandgetty.data.remote.FeedSource
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
+import com.nomnomsom.armstrongandgetty.data.remote.SegmentStore
 import com.nomnomsom.armstrongandgetty.util.AppLog
-import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
 import com.nomnomsom.armstrongandgetty.util.nowMs
-import com.nomnomsom.armstrongandgetty.util.parseDayKey
-import com.nomnomsom.armstrongandgetty.util.parseRssPubDate
-import com.nomnomsom.armstrongandgetty.util.parseRssPubDateMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.format.MonthNames
-import kotlinx.datetime.format.char
 import kotlinx.datetime.todayIn
 import kotlinx.serialization.json.Json
 import okio.FileSystem
@@ -42,21 +36,15 @@ data class LiveSegmentAppendResult(
 
 class PodcastRepository(
     private val dao: PodcastDayDao,
-    private val rssFeedParser: RssFeedParser,
-    private val audioDownloader: AudioDownloader,
-    private val deletionTracker: UserDeletionTracker
+    private val rssFeedParser: FeedSource,
+    private val audioDownloader: SegmentStore,
+    private val deletionTracker: DeletionMarks,
+    private val todayProvider: () -> LocalDate = {
+        Clock.System.todayIn(TimeZone.currentSystemDefault())
+    }
 ) {
     companion object {
         private const val TAG = "PodcastRepository"
-
-        private val dayTitleFormat = kotlinx.datetime.LocalDate.Format {
-            monthName(MonthNames.ENGLISH_ABBREVIATED)
-            char(' ')
-            day(kotlinx.datetime.format.Padding.NONE)
-            char(',')
-            char(' ')
-            year()
-        }
     }
 
     // Reads old Gson-written rows (same field names) and writes the same shape back.
@@ -104,7 +92,7 @@ class PodcastRepository(
         if (result.isFailure) return Result.failure(result.exceptionOrNull()!!)
 
         val items = result.getOrThrow()
-        val groupedByDate = groupItemsByDate(items)
+        val groupedByDate = EpisodeAssembler.groupItemsByDate(items)
 
         var latestDate = ""
 
@@ -113,34 +101,18 @@ class PodcastRepository(
 
             val existingDay = dao.getDayByDate(date)
             val existingSegments = existingDay?.let { parseSegments(it.segmentsJson) } ?: emptyList()
-            val rssSegments = dayItems.mapIndexed { index, item ->
-                val hourLabel = extractHourLabel(item.title, index + 1)
-                Segment(
-                    hour = hourLabel,
-                    title = item.title,
-                    description = item.description,
-                    durationMs = item.durationSeconds * 1000,
-                    audioUrl = item.audioUrl,
-                    pubDate = item.pubDate
-                )
-            }.sortedBy { seg ->
-                parseRssPubDateMs(seg.pubDate)
-            }.mapIndexed { index, seg ->
-                val hourLabel = if (seg.hour == "OMT") "OMT"
-                else extractHourLabel(seg.title, index + 1)
-                seg.copy(hour = hourLabel)
-            }
-            val segments = mergeDownloadedMetadata(rssSegments, existingSegments)
+            val rssSegments = EpisodeAssembler.buildSegments(dayItems)
+            val segments = EpisodeAssembler.mergeDownloadedMetadata(rssSegments, existingSegments)
 
             val segmentsJson = json.encodeToString(segments)
             val totalDuration = segments.sumOf { it.effectiveDurationMs }
-            val summary = buildSummary(segments)
-            val isComplete = isDayComplete(date, segments)
+            val summary = EpisodeAssembler.buildSummary(segments)
+            val isComplete = EpisodeAssembler.isDayComplete(date, segments, todayProvider())
 
             if (existingDay == null) {
                 val day = PodcastDay(
                     date = date,
-                    title = formatDayTitle(date),
+                    title = EpisodeAssembler.formatDayTitle(date),
                     summary = summary,
                     segmentsJson = segmentsJson,
                     totalDurationMs = totalDuration,
@@ -431,69 +403,4 @@ class PodcastRepository(
         emptyList()
     }
 
-    private fun mergeDownloadedMetadata(
-        freshSegments: List<Segment>,
-        existingSegments: List<Segment>
-    ): List<Segment> {
-        if (existingSegments.isEmpty()) return freshSegments
-
-        val existingByUrl = existingSegments.associateBy { it.audioUrl }
-        return freshSegments.map { fresh ->
-            val existing = existingByUrl[fresh.audioUrl]
-                ?: existingSegments.firstOrNull {
-                    it.pubDate == fresh.pubDate && it.title == fresh.title
-                }
-            val actualDurationMs = existing?.actualDurationMs ?: 0L
-            if (actualDurationMs > 0) {
-                fresh.copy(actualDurationMs = actualDurationMs)
-            } else {
-                fresh
-            }
-        }
-    }
-
-    private fun groupItemsByDate(items: List<RssItem>): Map<String, List<RssItem>> {
-        return items.mapNotNull { item ->
-            parseRssPubDate(item.pubDate)?.let { formatAsDayKey(it) to item }
-        }
-            .groupBy({ it.first }, { it.second })
-            .toList()
-            .sortedByDescending { it.first }
-            .toMap()
-    }
-
-    private fun extractHourLabel(title: String, fallbackIndex: Int): String {
-        val hourPattern = Regex("Hour\\s+(\\d+)", RegexOption.IGNORE_CASE)
-        val match = hourPattern.find(title)
-        if (match != null) return match.groupValues[1]
-
-        if (title.contains("One More Thing", ignoreCase = true) ||
-            title.contains("OMT", ignoreCase = true)
-        ) {
-            return "OMT"
-        }
-
-        return fallbackIndex.toString()
-    }
-
-    private fun isDayComplete(date: String, segments: List<Segment>): Boolean {
-        val today = Clock.System.todayIn(TimeZone.currentSystemDefault()).toString()
-        if (date != today) return true
-
-        val hourSegments = segments.count { it.hour.toIntOrNull() != null }
-        return hourSegments >= 4
-    }
-
-    private fun formatDayTitle(date: String): String {
-        val parsed = parseDayKey(date) ?: return "A&G — $date"
-        return "A&G — ${dayTitleFormat.format(parsed)}"
-    }
-
-    private fun buildSummary(segments: List<Segment>): String {
-        val combined = segments
-            .map { it.description }
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
-        return if (combined.length > 400) combined.take(400) + "…" else combined
-    }
 }

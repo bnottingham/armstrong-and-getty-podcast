@@ -2,16 +2,16 @@ package com.nomnomsom.armstrongandgetty.data.local
 
 import platform.Foundation.NSUserDefaults
 
-actual class UserDeletionTracker {
+actual class UserDeletionTracker : DeletionMarks {
     private val defaults = NSUserDefaults.standardUserDefaults
 
-    actual fun isDeleted(date: String): Boolean = deletedDates().contains(date)
+    actual override fun isDeleted(date: String): Boolean = deletedDates().contains(date)
 
-    actual fun markDeleted(date: String) {
+    actual override fun markDeleted(date: String) {
         defaults.setObject((deletedDates() + date).toList(), KEY_DATES)
     }
 
-    actual fun unmarkDeleted(date: String) {
+    actual override fun unmarkDeleted(date: String) {
         defaults.setObject((deletedDates() - date).toList(), KEY_DATES)
     }
 

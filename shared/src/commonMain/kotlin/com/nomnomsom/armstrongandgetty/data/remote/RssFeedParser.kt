@@ -18,12 +18,12 @@ const val APP_USER_AGENT = "ArmstrongGettyPodcast/1.0"
 
 class RssFeedParser(
     private val httpClient: HttpClient
-) {
+) : FeedSource {
     companion object {
         const val FEED_URL = "https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/0516ff28-c0d6-492a-b264-ae3900375fc8/4db37684-c7ed-4964-843c-ae3900375fd7/podcast.rss"
     }
 
-    suspend fun fetchFeed(): Result<List<RssItem>> = withContext(Dispatchers.IO) {
+    override suspend fun fetchFeed(): Result<List<RssItem>> = withContext(Dispatchers.IO) {
         try {
             val response = httpClient.get(FEED_URL) {
                 header(HttpHeaders.UserAgent, APP_USER_AGENT)
@@ -39,7 +39,8 @@ class RssFeedParser(
         }
     }
 
-    private fun parseRss(xml: String): List<RssItem> {
+    // Internal so the test harness can feed it raw XML fixtures without a network stack.
+    internal fun parseRss(xml: String): List<RssItem> {
         val items = mutableListOf<RssItem>()
         val reader = xmlStreaming.newReader(xml)
 

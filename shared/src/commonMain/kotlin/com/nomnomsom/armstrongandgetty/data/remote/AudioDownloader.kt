@@ -60,7 +60,7 @@ class CancelledByUserException : IOException("Download cancelled by user")
 @OptIn(ExperimentalAtomicApi::class)
 class AudioDownloader(
     private val httpClient: HttpClient
-) {
+) : SegmentStore {
     companion object {
         private const val TAG = "AudioDownloader"
         private const val PER_ATTEMPT_READ_TIMEOUT_MS = 30_000L
@@ -103,10 +103,10 @@ class AudioDownloader(
      * Progress is emitted as an aggregate — segmentsInProgress (single-element set), bytes downloaded,
      * completed/failed counts. Per-segment byte updates are throttled to ~10/sec.
      */
-    suspend fun downloadSegments(
+    override suspend fun downloadSegments(
         date: String,
         segments: List<Segment>,
-        onProgress: DownloadProgressCallback? = null
+        onProgress: DownloadProgressCallback?
     ): List<SegmentDownloadOutcome> = withContext(Dispatchers.IO) {
         val estimates = LongArray(segments.size) { estimateBytes(segments[it]) }
         val tracker = ProgressTracker(segments.size, estimates, ::elapsedMs, onProgress)
@@ -118,12 +118,12 @@ class AudioDownloader(
     }
 
     /** Download one segment — used by the per-segment retry action from the UI. */
-    suspend fun downloadSingleSegment(
+    override suspend fun downloadSingleSegment(
         date: String,
         segment: Segment,
         index: Int,
         totalSegments: Int,
-        onProgress: DownloadProgressCallback? = null
+        onProgress: DownloadProgressCallback?
     ): SegmentDownloadOutcome = withContext(Dispatchers.IO) {
         val estimates = LongArray(totalSegments) { if (it == index) estimateBytes(segment) else 0L }
         val tracker = ProgressTracker(totalSegments, estimates, ::elapsedMs, onProgress)
@@ -141,7 +141,7 @@ class AudioDownloader(
      * flight — it just records the intent so the next attempt aborts before starting. The
      * cancellation flag clears on the next [downloadWithRetry] entry for that segment.
      */
-    suspend fun cancelSegment(date: String, index: Int) {
+    override suspend fun cancelSegment(date: String, index: Int) {
         val jobToCancel: Job? = stateMutex.withLock {
             cancelledSegments.add(date to index)
             activeAttempts[date to index]
@@ -151,7 +151,7 @@ class AudioDownloader(
     }
 
     /** Cancel every active segment for a date. Sequential downloads mean usually one. */
-    suspend fun cancelDay(date: String) {
+    override suspend fun cancelDay(date: String) {
         val toCancel: List<Job> = stateMutex.withLock {
             val keys = activeAttempts.keys.filter { it.first == date }
             keys.forEach { cancelledSegments.add(it) }
@@ -348,19 +348,19 @@ class AudioDownloader(
     private fun partialSegmentFile(date: String, index: Int): Path =
         podcastDir / "ag_${date}_seg${index}.mp3.part"
 
-    fun getSegmentFiles(date: String, segmentCount: Int): List<String> =
+    override fun getSegmentFiles(date: String, segmentCount: Int): List<String> =
         (0 until segmentCount).map { segmentFile(date, it).toString() }
 
-    fun hasAllSegments(date: String, segmentCount: Int): Boolean =
+    override fun hasAllSegments(date: String, segmentCount: Int): Boolean =
         (0 until segmentCount).all { hasSegment(date, it) }
 
-    fun hasSegment(date: String, index: Int): Boolean =
+    override fun hasSegment(date: String, index: Int): Boolean =
         (fs.metadataOrNull(segmentFile(date, index))?.size ?: 0L) > 0L
 
-    fun missingSegmentIndices(date: String, segmentCount: Int): Set<Int> =
+    override fun missingSegmentIndices(date: String, segmentCount: Int): Set<Int> =
         (0 until segmentCount).filterNot { hasSegment(date, it) }.toSet()
 
-    fun deleteSegmentFiles(date: String) {
+    override fun deleteSegmentFiles(date: String) {
         val prefix = "ag_${date}_seg"
         fs.listOrNull(podcastDir)
             ?.filter { it.name.startsWith(prefix) }

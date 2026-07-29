@@ -3,17 +3,17 @@ package com.nomnomsom.armstrongandgetty.data.local
 import android.content.Context
 import android.content.SharedPreferences
 
-actual class UserDeletionTracker(context: Context) {
+actual class UserDeletionTracker(context: Context) : DeletionMarks {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    actual fun isDeleted(date: String): Boolean = deletedDates().contains(date)
+    actual override fun isDeleted(date: String): Boolean = deletedDates().contains(date)
 
-    actual fun markDeleted(date: String) {
+    actual override fun markDeleted(date: String) {
         prefs.edit().putStringSet(KEY_DATES, deletedDates() + date).apply()
     }
 
-    actual fun unmarkDeleted(date: String) {
+    actual override fun unmarkDeleted(date: String) {
         prefs.edit().putStringSet(KEY_DATES, deletedDates() - date).apply()
     }
 

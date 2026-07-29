@@ -11,7 +11,14 @@ package com.nomnomsom.armstrongandgetty.data.local
  * shape back requires the platform API — a common string-based store would orphan (or
  * crash on) existing installs' data.
  */
-expect class UserDeletionTracker {
+expect class UserDeletionTracker : DeletionMarks {
+    override fun isDeleted(date: String): Boolean
+    override fun markDeleted(date: String)
+    override fun unmarkDeleted(date: String)
+}
+
+/** Common-code view of [UserDeletionTracker]; faked in the episode-engine tests. */
+interface DeletionMarks {
     fun isDeleted(date: String): Boolean
     fun markDeleted(date: String)
     fun unmarkDeleted(date: String)

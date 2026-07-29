@@ -2,6 +2,7 @@ package com.nomnomsom.armstrongandgetty.di
 
 import androidx.room.RoomDatabase
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
+import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
@@ -40,7 +41,14 @@ val commonModule = module {
 
     single { RssFeedParser(get()) }
     single { AudioDownloader(get()) }
-    single { PodcastRepository(get(), get(), get(), get()) }
+    single {
+        PodcastRepository(
+            dao = get(),
+            rssFeedParser = get<RssFeedParser>(),
+            audioDownloader = get<AudioDownloader>(),
+            deletionTracker = get<UserDeletionTracker>()
+        )
+    }
 
     single { PlaybackController(get()) }
 
