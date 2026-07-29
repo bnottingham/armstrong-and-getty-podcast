@@ -39,6 +39,7 @@ object AnalyticsEvents {
     const val SEGMENT_JUMP = "segment_jump"
     const val FEED_REFRESH_FAILED = "feed_refresh_failed"
     const val BACKGROUND_REFRESH = "background_refresh"
+    const val ABOUT_LINK_OPEN = "about_link_open"
 
     // Params
     const val PARAM_DATE = "episode_date"
@@ -48,4 +49,5 @@ object AnalyticsEvents {
     const val PARAM_REASON = "reason"
     const val PARAM_NEW_SEGMENTS = "new_segments"
     const val PARAM_RESULT = "result"
+    const val PARAM_LINK = "link"
 }
