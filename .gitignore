@@ -14,8 +14,6 @@
 bin/
 gen/
 out/
-node_modules/
-functions/lib/
 
 # Gradle files
 .gradle/
@@ -60,9 +58,6 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Google Services (uncomment if you want to exclude — but you need this for Firebase)
-# google-services.json
-
 # Freeline
 freeline.py
 freeline/
@@ -95,9 +90,6 @@ Thumbs.db
 
 # Kotlin
 .kotlin/
-
-# Python Twitter scraper — Chrome profile data (hundreds of transient files)
-python-twitter/browser_data/
 
 # Claude worktrees
 .claude/worktrees/
