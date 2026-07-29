@@ -1,0 +1,77 @@
+name: Android release
+
+# Builds a Play-ready signed AAB (+ APK for sideload testing).
+# Signing: the upload keystore lives ONLY in GitHub secrets
+# (ANDROID_KEYSTORE_BASE64 / _PASSWORD, ANDROID_KEY_ALIAS / _PASSWORD);
+# Gradle picks it up via env vars — see Android/build.gradle.kts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionCode:
+        description: "Override versionCode (blank = value in build.gradle.kts)"
+        required: false
+      versionName:
+        description: "Override versionName (blank = value in build.gradle.kts)"
+        required: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Episode engine regression suite
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run shared tests (iosSimulatorArm64Test)
+        working-directory: Native Mobile
+        run: ./gradlew :shared:iosSimulatorArm64Test
+
+  android:
+    name: Signed AAB + APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Decode upload keystore
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - name: Build signed release
+        working-directory: Native Mobile
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ inputs.versionCode }}
+          VERSION_NAME: ${{ inputs.versionName }}
+        run: |
+          EXTRA=""
+          [ -n "$VERSION_CODE" ] && EXTRA="$EXTRA -PversionCode=$VERSION_CODE"
+          [ -n "$VERSION_NAME" ] && EXTRA="$EXTRA -PversionName=$VERSION_NAME"
+          ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease $EXTRA
+      - name: Shred keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload-keystore.jks"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          if-no-files-found: error
+          path: |
+            Native Mobile/Android/build/outputs/bundle/release/*.aab
+            Native Mobile/Android/build/outputs/apk/release/*.apk

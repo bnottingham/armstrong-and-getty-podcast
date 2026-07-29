@@ -91,6 +91,22 @@ Media button preferences use Media3's **built-in icons**
 (theme-attr tints render malformed in notification shells). ±30s sits in the primary
 back/forward slots, ±10s in the secondary slots (surfaces on Auto/Wear).
 
+## Release CI & signing
+
+- Website: `docs/` → Firebase Hosting (`firebase deploy --only hosting`), live at
+  https://armstrong-and-getty-podcast.web.app (cleanUrls; store-listing URLs
+  `/privacy` and `/support`).
+- Android release signing: the Play **upload keystore is never in the repo** — it
+  lives in `~/keystores/armstrong-and-getty-podcast/` (Brett's machine) and in GitHub
+  Actions secrets (`ANDROID_KEYSTORE_BASE64/_PASSWORD`, `ANDROID_KEY_ALIAS/_PASSWORD`).
+  `Android/build.gradle.kts` signs release builds only when `ANDROID_KEYSTORE_PATH`
+  is set in the env; local release builds are unsigned.
+- `.github/workflows/android-release.yml` (tag `v*` or manual dispatch): runs the
+  shared engine test suite on macOS, then builds a signed AAB + APK on ubuntu.
+  `versionCode`/`versionName` accept `-P` overrides / dispatch inputs.
+- `.github/workflows/ios-release.yml` is a dispatch-only scaffold that fails fast
+  until the Apple signing secrets listed in its header are configured.
+
 ## Upgrade-in-place invariants (Android)
 
 The app replaced an earlier native app. These names must never change: applicationId,

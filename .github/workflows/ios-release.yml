@@ -1,0 +1,49 @@
+name: iOS release
+
+# SCAFFOLD — runs only on manual dispatch and fails fast until the Apple
+# signing secrets exist. Once you have an Apple Developer account, add:
+#   APPLE_CERT_P12_BASE64     distribution certificate (.p12), base64-encoded
+#   APPLE_CERT_PASSWORD       password for the .p12
+#   APPLE_PROVISIONING_PROFILE_BASE64   App Store provisioning profile, base64
+#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8_BASE64   App Store Connect API key
+# then fill in the archive/export/upload steps below.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: Archive + upload to App Store Connect
+    runs-on: macos-15
+    steps:
+      - name: Check Apple signing secrets
+        env:
+          CERT: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+        run: |
+          if [ -z "$CERT" ]; then
+            echo "::error::Apple signing secrets are not configured yet." \
+                 "Add the secrets listed at the top of ios-release.yml," \
+                 "then complete the archive/export steps."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      # TODO once secrets exist:
+      # 1. Import APPLE_CERT_P12_BASE64 into a temporary keychain.
+      # 2. Install the provisioning profile.
+      # 3. cd "Native Mobile/iOS" && xcodebuild archive
+      #    (build phase fetches the Cast SDK and embeds the shared framework).
+      # 4. xcodebuild -exportArchive with an App Store export options plist.
+      # 5. Upload with `xcrun altool`/`xcrun notarytool` or fastlane pilot
+      #    using the ASC_* API key secrets.
+      - name: Placeholder
+        run: echo "unreachable until secrets exist"
