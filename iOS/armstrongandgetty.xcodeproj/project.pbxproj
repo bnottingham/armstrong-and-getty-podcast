@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/GoogleCast.xcframework; sourceTree = "<group>"; };
 		8B36C2B130198E3600B3DF93 /* armstrongandgetty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = armstrongandgetty.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -19,6 +20,10 @@
 			target = 8B36C2B030198E3600B3DF93 /* armstrongandgetty */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXBuildFile section */
+		8B36C2C430198E3600B3DF93 /* GoogleCast.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8B36C2B330198E3600B3DF93 /* armstrongandgetty */ = {
@@ -36,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B36C2C430198E3600B3DF93 /* GoogleCast.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				8B36C2B330198E3600B3DF93 /* armstrongandgetty */,
+				8B36C2C330198E3600B3DF93 /* GoogleCast.xcframework */,
 				8B36C2B230198E3600B3DF93 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -136,7 +143,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\nif [ -z \"$JAVA_HOME\" ]; then\n  export JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || true)\nfi\ncd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\nif [ -z \"$JAVA_HOME\" ]; then\n  export JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || true)\nfi\ncd \"$SRCROOT/..\"\n./scripts/fetch_cast_sdk.sh\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -214,7 +221,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -272,7 +279,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -310,6 +317,18 @@
 					"$(inherited)",
 					"-framework",
 					Shared,
+					"-ObjC",
+					"-lc++",
+					"-framework",
+					MediaAccessibility,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-framework",
+					CoreBluetooth,
+					"-framework",
+					Accelerate,
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = nomnomsom.armstrongandgetty;
@@ -352,6 +371,18 @@
 					"$(inherited)",
 					"-framework",
 					Shared,
+					"-ObjC",
+					"-lc++",
+					"-framework",
+					MediaAccessibility,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					Network,
+					"-framework",
+					CoreBluetooth,
+					"-framework",
+					Accelerate,
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = nomnomsom.armstrongandgetty;

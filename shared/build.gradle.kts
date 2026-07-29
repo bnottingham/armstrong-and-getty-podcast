@@ -30,6 +30,14 @@ kotlin {
             baseName = "Shared"
             isStatic = true
         }
+
+        // Google Cast SDK bindings. The xcframework is fetched by scripts/fetch_cast_sdk.sh
+        // (run automatically from the Xcode build phase); the app target links it.
+        val castSlice = if (iosTarget.name == "iosArm64") "ios-arm64" else "ios-arm64_x86_64-simulator"
+        iosTarget.compilations.getByName("main").cinterops.create("GoogleCast") {
+            defFile(project.file("src/nativeInterop/cinterop/GoogleCast.def"))
+            compilerOpts("-F${rootProject.projectDir}/iOS/Frameworks/GoogleCast.xcframework/$castSlice")
+        }
     }
 
     sourceSets {

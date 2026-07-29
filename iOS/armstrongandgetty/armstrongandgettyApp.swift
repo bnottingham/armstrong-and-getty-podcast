@@ -19,6 +19,11 @@ struct ComposeView: UIViewControllerRepresentable {
 
 @main
 struct armstrongandgettyApp: App {
+    init() {
+        // BGTaskScheduler handlers must be registered before launch completes.
+        BackgroundRefreshKt.registerBackgroundRefresh()
+    }
+
     var body: some Scene {
         WindowGroup {
             ComposeView()

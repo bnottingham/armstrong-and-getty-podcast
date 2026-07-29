@@ -2,7 +2,6 @@ package com.nomnomsom.armstrongandgetty
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -80,7 +79,7 @@ fun App() {
                         }
                     },
                     actions = {
-                        MediaRouteAction(modifier = Modifier.size(48.dp))
+                        MediaRouteAction(modifier = Modifier)
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
