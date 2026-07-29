@@ -5,6 +5,7 @@ import googlecast.GCKCastContext
 import googlecast.GCKCastOptions
 import googlecast.GCKDiscoveryCriteria
 import googlecast.kGCKDefaultMediaReceiverApplicationID
+import googlecast.useDefaultExpandedMediaControls
 import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
@@ -23,6 +24,8 @@ object CastManager {
             val criteria = GCKDiscoveryCriteria(applicationID = kGCKDefaultMediaReceiverApplicationID!!)
             val options = GCKCastOptions(discoveryCriteria = criteria)
             GCKCastContext.setSharedInstanceWithOptions(options)
+            // Tapping the mini media controls opens the SDK's full-screen controller.
+            GCKCastContext.sharedInstance().useDefaultExpandedMediaControls = true
             AppLog.d(TAG, "Cast context initialized")
         } catch (e: Exception) {
             AppLog.w(TAG, "Cast unavailable", e)

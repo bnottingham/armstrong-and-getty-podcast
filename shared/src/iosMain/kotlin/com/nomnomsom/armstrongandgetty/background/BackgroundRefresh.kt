@@ -1,9 +1,11 @@
 package com.nomnomsom.armstrongandgetty.background
 
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
+import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.di.ensureKoinStarted
+import com.nomnomsom.armstrongandgetty.notifications.AppNotifications
 import com.nomnomsom.armstrongandgetty.util.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +81,8 @@ private fun handleRefresh(task: BGAppRefreshTask) {
                 return@launch
             }
 
+            notifyIfNewContent(daysBefore, repository.getAllDaysSnapshot())
+
             for (day in repository.getAllDaysSnapshot()) {
                 val previousCount = daysBefore[day.date]
                 when {
@@ -108,4 +112,33 @@ private fun handleRefresh(task: BGAppRefreshTask) {
         AppLog.w(TAG, "Background refresh expired — cancelling")
         job.cancel()
     }
+}
+
+/** Mirrors NewEpisodeCheckWorker's notification: diff segment counts before/after refresh. */
+private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<PodcastDay>) {
+    var newEpisodeFound = false
+    var newSegmentsFound = false
+    var totalNewSegments = 0
+
+    for (day in daysAfter) {
+        val previousCount = daysBefore[day.date]
+        if (previousCount == null) {
+            newEpisodeFound = true
+            totalNewSegments += day.segmentCount
+        } else if (day.segmentCount > previousCount) {
+            newSegmentsFound = true
+            totalNewSegments += (day.segmentCount - previousCount)
+        }
+    }
+
+    if (!newEpisodeFound && !newSegmentsFound) return
+
+    val title = if (newEpisodeFound) "New A&G Episode Available" else "New A&G Segments Available"
+    val plural = if (totalNewSegments != 1) "s" else ""
+    val body = if (newEpisodeFound) {
+        "Today's show is ready — $totalNewSegments segment$plural available"
+    } else {
+        "$totalNewSegments new segment$plural added to today's show"
+    }
+    AppNotifications.postNewContent(title, body)
 }
