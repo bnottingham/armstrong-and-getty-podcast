@@ -3,6 +3,11 @@
 Kotlin Multiplatform + Compose Multiplatform podcast app (Android + iOS). Nearly all
 code lives in `Native Mobile/shared/src/commonMain`; the platform shells are thin.
 
+Shared agent playbook: `../ai-agent-docs/README.md` — read the matching guide before
+platform-sensitive work. For casting specifically:
+`../ai-agent-docs/media/android-chromecast-media3.md` (the generic pattern; this file
+records how it's wired in this app).
+
 ## Layout & builds
 
 - `Native Mobile/` is the Gradle/KMP root — **the path contains a space; always quote it**.
