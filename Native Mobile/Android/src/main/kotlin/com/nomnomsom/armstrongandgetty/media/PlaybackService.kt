@@ -27,7 +27,6 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.nomnomsom.armstrongandgetty.R
 import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
 
 @OptIn(UnstableApi::class)
@@ -165,29 +164,30 @@ class PlaybackService : MediaLibraryService() {
             session: MediaSession,
             controllerInfo: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
-            // Samsung's media notification places custom buttons around play/pause in rotation:
-            // index 0 → nearest-left, index 1 → nearest-right, index 2 → far-left, index 3 → far-right.
-            // This ordering lands as [Back10, Back30, play, Fwd30, Fwd10] on-device.
-            val customLayout = ImmutableList.of(
-                CommandButton.Builder()
-                    .setDisplayName("Backward 30s")
+            // Media3's built-in skip icons (ICON_SKIP_*) render crisply in every
+            // notification shell — hand-vendored drawables with theme-attr tints don't.
+            // Slot hints place ±30 beside play/pause and ±10 outside them; the system
+            // resolves layout per surface (phone notification, Wear, Auto).
+            val mediaButtonPreferences = ImmutableList.of(
+                CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
+                    .setDisplayName("Back 30 seconds")
                     .setSessionCommand(SessionCommand("BACKWARD_30", Bundle.EMPTY))
-                    .setIconResId(R.drawable.ic_replay_30)
+                    .setSlots(CommandButton.SLOT_BACK)
                     .build(),
-                CommandButton.Builder()
-                    .setDisplayName("Forward 30s")
+                CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+                    .setDisplayName("Forward 30 seconds")
                     .setSessionCommand(SessionCommand("FORWARD_30", Bundle.EMPTY))
-                    .setIconResId(R.drawable.ic_forward_30)
+                    .setSlots(CommandButton.SLOT_FORWARD)
                     .build(),
-                CommandButton.Builder()
-                    .setDisplayName("Backward 10s")
+                CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+                    .setDisplayName("Back 10 seconds")
                     .setSessionCommand(SessionCommand("BACKWARD_10", Bundle.EMPTY))
-                    .setIconResId(R.drawable.ic_replay_10)
+                    .setSlots(CommandButton.SLOT_BACK_SECONDARY)
                     .build(),
-                CommandButton.Builder()
-                    .setDisplayName("Forward 10s")
+                CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
+                    .setDisplayName("Forward 10 seconds")
                     .setSessionCommand(SessionCommand("FORWARD_10", Bundle.EMPTY))
-                    .setIconResId(R.drawable.ic_forward_10)
+                    .setSlots(CommandButton.SLOT_FORWARD_SECONDARY)
                     .build()
             )
             // Disable the "skip to next/previous media item" player commands so external controllers
@@ -211,7 +211,7 @@ class PlaybackService : MediaLibraryService() {
                         .build()
                 )
                 .setAvailablePlayerCommands(playerCommands)
-                .setCustomLayout(customLayout)
+                .setMediaButtonPreferences(mediaButtonPreferences)
                 .build()
         }
 

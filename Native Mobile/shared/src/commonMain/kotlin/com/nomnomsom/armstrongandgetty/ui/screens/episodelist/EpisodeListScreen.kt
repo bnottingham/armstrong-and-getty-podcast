@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +58,7 @@ import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
+import com.nomnomsom.armstrongandgetty.ui.theme.GoldDark
 import com.nomnomsom.armstrongandgetty.ui.theme.LiveRed
 import com.nomnomsom.armstrongandgetty.ui.theme.SuccessGreen
 import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
@@ -95,8 +96,6 @@ fun EpisodeListScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        EpisodeListHeader()
-
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { viewModel.refreshFeed() },
@@ -200,45 +199,6 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun EpisodeListHeader() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "A&G",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp
-                ),
-                color = Gold
-            )
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Armstrong & Getty",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text(
-                text = "PODCAST · ON DEMAND",
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
-    }
-}
-
-@Composable
 private fun NowPlayingCard(
     day: PodcastDay,
     playbackState: PlaybackState,
@@ -266,10 +226,17 @@ private fun NowPlayingCard(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(
+                            Brush.linearGradient(listOf(Gold, GoldDark))
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("A&G", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Gold)
+                    Text(
+                        "A&G",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.background
+                    )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -445,37 +412,44 @@ private fun NowPlayingPlaceholder() {
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.10f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("A&G", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Gold)
+                Icon(
+                    AppIcons.GraphicEq,
+                    contentDescription = null,
+                    tint = Gold.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Nothing playing",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 14.sp,
-                    color = TextSecondary
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "Nothing playing",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
                 )
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Pick an episode below to start listening",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    color = TextMuted
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Pick an episode below to start listening",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = TextMuted
+                    )
                 )
-            )
+            }
         }
     }
 }

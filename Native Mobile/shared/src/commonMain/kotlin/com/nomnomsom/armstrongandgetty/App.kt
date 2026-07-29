@@ -1,7 +1,15 @@
 package com.nomnomsom.armstrongandgetty
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -17,7 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +49,9 @@ import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.ui.theme.AGPodcastTheme
 import com.nomnomsom.armstrongandgetty.ui.theme.CardBg
+import com.nomnomsom.armstrongandgetty.ui.theme.DarkBg
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
+import com.nomnomsom.armstrongandgetty.ui.theme.GoldDark
 import com.nomnomsom.armstrongandgetty.ui.theme.TextMuted
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -74,18 +87,49 @@ fun App() {
             topBar = {
                 TopAppBar(
                     title = {
-                        if (isPlayerRoute) {
-                            Text(
+                        when {
+                            isPlayerRoute -> Text(
                                 "NOW PLAYING",
                                 style = MaterialTheme.typography.labelSmall
                             )
-                        } else {
-                            Text(
+                            // The About tab carries its own hero branding.
+                            currentRoute == "about" -> Text(
                                 "A&G",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Gold
                             )
+                            else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(9.dp))
+                                        .background(Brush.linearGradient(listOf(Gold, GoldDark)))
+                                ) {
+                                    Text(
+                                        "A&G",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = DarkBg
+                                    )
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        "Armstrong & Getty",
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 17.sp)
+                                    )
+                                    Text(
+                                        "PODCAST · ON DEMAND",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.sp,
+                                            letterSpacing = 1.4.sp
+                                        ),
+                                        color = Gold
+                                    )
+                                }
+                            }
                         }
                     },
                     navigationIcon = {
