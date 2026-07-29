@@ -91,6 +91,32 @@ Thumbs.db
 # Kotlin
 .kotlin/
 
+# Xcode — per-user state (window layout, selected scheme, breakpoints).
+# Covers both UserInterfaceState.xcuserstate and xcschememanagement.plist.
+xcuserdata/
+*.xcuserstate
+
+# Xcode build output (build/ is already ignored above for Gradle)
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Xcode legacy per-user project files
+*.pbxuser
+!default.pbxuser
+*.perspectivev3
+!default.perspectivev3
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+
+# CocoaPods / Carthage — uncomment if either is adopted
+# Pods/
+# Carthage/Build/
+
 # Claude worktrees
 .claude/worktrees/
 .claude/scheduled_tasks.lock
