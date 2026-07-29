@@ -24,6 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "ArmstrongAndGetty"
 include(":shared")
-// The Android app shell lives under android/ to mirror the iOS/ wrapper layout.
+// The Android app shell lives under Android/ to mirror the iOS/ wrapper layout.
 include(":androidApp")
-project(":androidApp").projectDir = file("android/armstrongandgetty")
+project(":androidApp").projectDir = file("Android/armstrongandgetty")
