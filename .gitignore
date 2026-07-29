@@ -123,3 +123,7 @@ Packages/
 
 # JVM heap dumps
 *.hprof
+
+# Google Cast iOS SDK — 71MB vendored binary, auto-downloaded by the Xcode
+# "Compile Kotlin Framework" build phase (see iOS project) or scripts/fetch_cast_sdk.sh
+iOS/Frameworks/GoogleCast.xcframework/

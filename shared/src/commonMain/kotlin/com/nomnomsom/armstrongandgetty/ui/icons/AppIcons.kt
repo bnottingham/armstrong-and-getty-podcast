@@ -764,4 +764,146 @@ object AppIcons {
         }.build()
     }
 
+    val Airplay: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Airplay", defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f, autoMirror = false
+        ).apply {
+            path(
+                fill = SolidColor(Color.Black), fillAlpha = 1f, stroke = null,
+                strokeAlpha = 1f, strokeLineWidth = 1f, strokeLineCap = StrokeCap.Butt,
+                strokeLineJoin = StrokeJoin.Bevel, strokeLineMiter = 1f,
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(6.0f, 22.0f)
+                lineToRelative(12.0f, 0.0f)
+                lineToRelative(-6.0f, -6.0f)
+                close()
+            }
+            path(
+                fill = SolidColor(Color.Black), fillAlpha = 1f, stroke = null,
+                strokeAlpha = 1f, strokeLineWidth = 1f, strokeLineCap = StrokeCap.Butt,
+                strokeLineJoin = StrokeJoin.Bevel, strokeLineMiter = 1f,
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(21.0f, 3.0f)
+                horizontalLineTo(3.0f)
+                curveTo(1.9f, 3.0f, 1.0f, 3.9f, 1.0f, 5.0f)
+                verticalLineToRelative(12.0f)
+                curveToRelative(0.0f, 1.1f, 0.9f, 2.0f, 2.0f, 2.0f)
+                horizontalLineToRelative(4.0f)
+                verticalLineToRelative(-2.0f)
+                horizontalLineTo(3.0f)
+                verticalLineTo(5.0f)
+                horizontalLineToRelative(18.0f)
+                verticalLineToRelative(12.0f)
+                horizontalLineToRelative(-4.0f)
+                verticalLineToRelative(2.0f)
+                horizontalLineToRelative(4.0f)
+                curveToRelative(1.1f, 0.0f, 2.0f, -0.9f, 2.0f, -2.0f)
+                verticalLineTo(5.0f)
+                curveTo(23.0f, 3.9f, 22.1f, 3.0f, 21.0f, 3.0f)
+                close()
+            }
+        }.build()
+    }
+    val Cast: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Cast", defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f, autoMirror = false
+        ).apply {
+            path(
+                fill = SolidColor(Color.Black), fillAlpha = 1f, stroke = null,
+                strokeAlpha = 1f, strokeLineWidth = 1f, strokeLineCap = StrokeCap.Butt,
+                strokeLineJoin = StrokeJoin.Bevel, strokeLineMiter = 1f,
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(21.0f, 3.0f)
+                lineTo(3.0f, 3.0f)
+                curveToRelative(-1.1f, 0.0f, -2.0f, 0.9f, -2.0f, 2.0f)
+                verticalLineToRelative(3.0f)
+                horizontalLineToRelative(2.0f)
+                lineTo(3.0f, 5.0f)
+                horizontalLineToRelative(18.0f)
+                verticalLineToRelative(14.0f)
+                horizontalLineToRelative(-7.0f)
+                verticalLineToRelative(2.0f)
+                horizontalLineToRelative(7.0f)
+                curveToRelative(1.1f, 0.0f, 2.0f, -0.9f, 2.0f, -2.0f)
+                lineTo(23.0f, 5.0f)
+                curveToRelative(0.0f, -1.1f, -0.9f, -2.0f, -2.0f, -2.0f)
+                close()
+                moveTo(1.0f, 18.0f)
+                verticalLineToRelative(3.0f)
+                horizontalLineToRelative(3.0f)
+                curveToRelative(0.0f, -1.66f, -1.34f, -3.0f, -3.0f, -3.0f)
+                close()
+                moveTo(1.0f, 14.0f)
+                verticalLineToRelative(2.0f)
+                curveToRelative(2.76f, 0.0f, 5.0f, 2.24f, 5.0f, 5.0f)
+                horizontalLineToRelative(2.0f)
+                curveToRelative(0.0f, -3.87f, -3.13f, -7.0f, -7.0f, -7.0f)
+                close()
+                moveTo(1.0f, 10.0f)
+                verticalLineToRelative(2.0f)
+                curveToRelative(4.97f, 0.0f, 9.0f, 4.03f, 9.0f, 9.0f)
+                horizontalLineToRelative(2.0f)
+                curveToRelative(0.0f, -6.08f, -4.93f, -11.0f, -11.0f, -11.0f)
+                close()
+            }
+        }.build()
+    }
+    val CastConnected: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "CastConnected", defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f, autoMirror = false
+        ).apply {
+            path(
+                fill = SolidColor(Color.Black), fillAlpha = 1f, stroke = null,
+                strokeAlpha = 1f, strokeLineWidth = 1f, strokeLineCap = StrokeCap.Butt,
+                strokeLineJoin = StrokeJoin.Bevel, strokeLineMiter = 1f,
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(1.0f, 18.0f)
+                verticalLineToRelative(3.0f)
+                horizontalLineToRelative(3.0f)
+                curveToRelative(0.0f, -1.66f, -1.34f, -3.0f, -3.0f, -3.0f)
+                close()
+                moveTo(1.0f, 14.0f)
+                verticalLineToRelative(2.0f)
+                curveToRelative(2.76f, 0.0f, 5.0f, 2.24f, 5.0f, 5.0f)
+                horizontalLineToRelative(2.0f)
+                curveToRelative(0.0f, -3.87f, -3.13f, -7.0f, -7.0f, -7.0f)
+                close()
+                moveTo(19.0f, 7.0f)
+                lineTo(5.0f, 7.0f)
+                verticalLineToRelative(1.63f)
+                curveToRelative(3.96f, 1.28f, 7.09f, 4.41f, 8.37f, 8.37f)
+                lineTo(19.0f, 17.0f)
+                lineTo(19.0f, 7.0f)
+                close()
+                moveTo(1.0f, 10.0f)
+                verticalLineToRelative(2.0f)
+                curveToRelative(4.97f, 0.0f, 9.0f, 4.03f, 9.0f, 9.0f)
+                horizontalLineToRelative(2.0f)
+                curveToRelative(0.0f, -6.08f, -4.93f, -11.0f, -11.0f, -11.0f)
+                close()
+                moveTo(21.0f, 3.0f)
+                lineTo(3.0f, 3.0f)
+                curveToRelative(-1.1f, 0.0f, -2.0f, 0.9f, -2.0f, 2.0f)
+                verticalLineToRelative(3.0f)
+                horizontalLineToRelative(2.0f)
+                lineTo(3.0f, 5.0f)
+                horizontalLineToRelative(18.0f)
+                verticalLineToRelative(14.0f)
+                horizontalLineToRelative(-7.0f)
+                verticalLineToRelative(2.0f)
+                horizontalLineToRelative(7.0f)
+                curveToRelative(1.1f, 0.0f, 2.0f, -0.9f, 2.0f, -2.0f)
+                lineTo(23.0f, 5.0f)
+                curveToRelative(0.0f, -1.1f, -0.9f, -2.0f, -2.0f, -2.0f)
+                close()
+            }
+        }.build()
+    }
 }

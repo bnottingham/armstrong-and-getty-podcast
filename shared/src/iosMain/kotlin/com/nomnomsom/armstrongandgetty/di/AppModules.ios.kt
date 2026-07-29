@@ -6,6 +6,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.media.AvPlatformPlayer
+import com.nomnomsom.armstrongandgetty.media.CastAwarePlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.PlatformPlayer
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
@@ -35,5 +36,5 @@ actual fun platformModule(): Module = module {
 
     single { UserDeletionTracker() }
 
-    single<PlatformPlayer> { AvPlatformPlayer() }
+    single<PlatformPlayer> { CastAwarePlatformPlayer(AvPlatformPlayer()) }
 }
