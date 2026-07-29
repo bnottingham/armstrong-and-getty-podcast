@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bnottingham.github.io/armstrong-and-getty-podcast/sitemap.xml
+Sitemap: https://armstrong-and-getty-podcast.web.app/sitemap.xml

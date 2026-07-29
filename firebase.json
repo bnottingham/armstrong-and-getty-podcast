@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "site": "armstrong-and-getty-podcast",
+    "public": "docs",
+    "ignore": ["firebase.json", "**/.*"],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "headers": [
+      {
+        "source": "/assets/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=604800" }
+        ]
+      }
+    ]
+  }
+}
