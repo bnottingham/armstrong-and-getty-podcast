@@ -15,6 +15,8 @@
 		<string>_googlecast._tcp</string>
 		<string>_CC1AD845._googlecast._tcp</string>
 	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Armstrong &amp; Getty uses Bluetooth to help discover nearby Chromecast devices so you can cast episodes to your speakers and TV.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Armstrong &amp; Getty uses the local network to discover Chromecast devices so you can cast episodes to your speakers and TV.</string>
 	<key>UIBackgroundModes</key>
