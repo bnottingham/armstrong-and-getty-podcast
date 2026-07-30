@@ -1,49 +1,87 @@
 name: iOS release
 
-# SCAFFOLD — runs only on manual dispatch and fails fast until the Apple
-# signing secrets exist. Once you have an Apple Developer account, add:
-#   APPLE_CERT_P12_BASE64     distribution certificate (.p12), base64-encoded
-#   APPLE_CERT_PASSWORD       password for the .p12
-#   APPLE_PROVISIONING_PROFILE_BASE64   App Store provisioning profile, base64
-#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8_BASE64   App Store Connect API key
-# then fill in the archive/export/upload steps below.
+# Archives with Xcode cloud signing (no cert/profile files to manage — the
+# App Store Connect API key authorizes certificate + profile creation on the
+# runner) and uploads straight to TestFlight.
+# Secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64, APPLE_TEAM_ID.
 
 on:
   workflow_dispatch:
+    inputs:
+      marketingVersion:
+        description: "Override MARKETING_VERSION (blank = value in the Xcode project)"
+        required: false
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 jobs:
   ios:
-    name: Archive + upload to App Store Connect
-    runs-on: macos-15
+    name: Archive + upload to TestFlight
+    # macos-26: the Cast SDK links against iOS 26 SDK frameworks (see android-release.yml)
+    runs-on: macos-26
     steps:
-      - name: Check Apple signing secrets
-        env:
-          CERT: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-        run: |
-          if [ -z "$CERT" ]; then
-            echo "::error::Apple signing secrets are not configured yet." \
-                 "Add the secrets listed at the top of ios-release.yml," \
-                 "then complete the archive/export steps."
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
+      - name: Select newest installed Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Fetch Google Cast SDK (cinterop dependency, gitignored)
+        working-directory: Native Mobile
+        run: ./scripts/fetch_cast_sdk.sh
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: printf '%s' "$ASC_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
 
-      # TODO once secrets exist:
-      # 1. Import APPLE_CERT_P12_BASE64 into a temporary keychain.
-      # 2. Install the provisioning profile.
-      # 3. cd "Native Mobile/iOS" && xcodebuild archive
-      #    (build phase fetches the Cast SDK and embeds the shared framework).
-      # 4. xcodebuild -exportArchive with an App Store export options plist.
-      # 5. Upload with `xcrun altool`/`xcrun notarytool` or fastlane pilot
-      #    using the ASC_* API key secrets.
-      - name: Placeholder
-        run: echo "unreachable until secrets exist"
+      - name: Archive (cloud signing)
+        working-directory: Native Mobile/iOS
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MARKETING_VERSION_OVERRIDE: ${{ inputs.marketingVersion }}
+        run: |
+          # Build number must be unique per upload: monotonic across runs,
+          # distinct across re-run attempts.
+          BUILD_NUMBER=$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))
+          echo "Build number: $BUILD_NUMBER"
+          xcodebuild -project armstrongandgetty.xcodeproj \
+            -scheme armstrongandgetty \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/armstrongandgetty.xcarchive" \
+            archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            ${MARKETING_VERSION_OVERRIDE:+MARKETING_VERSION="$MARKETING_VERSION_OVERRIDE"}
+
+      - name: Upload to App Store Connect (TestFlight)
+        working-directory: Native Mobile/iOS
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/armstrongandgetty.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Shred API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
