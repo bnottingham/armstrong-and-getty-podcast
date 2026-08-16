@@ -6,6 +6,7 @@ import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
+import com.nomnomsom.armstrongandgetty.media.MediaCatalog
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import io.ktor.client.HttpClientConfig
@@ -51,6 +52,10 @@ val commonModule = module {
     }
 
     single { PlaybackController(get()) }
+
+    // Read-only library view for external media surfaces (Android Auto browse/search,
+    // playback resumption). Android's PlaybackService resolves it from Koin.
+    single { MediaCatalog(get()) }
 
     viewModel { EpisodeListViewModel(get(), get(), get()) }
 }

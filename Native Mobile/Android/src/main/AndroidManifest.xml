@@ -54,6 +54,19 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
+        <!-- Media button receiver: required for playback resumption. Without a manifest
+             MEDIA_BUTTON receiver Media3 reports canResumePlaybackOnStart()=false, so System UI
+             and Android Auto's "resume last session" probe (MediaResumeListener) fail to connect.
+             Media3 routes the button/resumption intent to PlaybackService, which serves the last
+             in-progress episode via MediaLibrarySession.Callback.onPlaybackResumption. -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Chromecast: Options Provider -->
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"

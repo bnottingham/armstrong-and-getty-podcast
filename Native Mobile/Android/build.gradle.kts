@@ -12,8 +12,9 @@ android {
         applicationId = "com.nomnomsom.armstrongandgetty"
         minSdk = 26
         targetSdk = 37
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 4
-        versionName = (project.findProperty("versionName") as String?) ?: "2.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 5
+        versionName = (project.findProperty("versionName") as String?) ?: "2.0.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // CI signing: the release workflow decodes the upload keystore from GitHub
@@ -67,4 +68,10 @@ dependencies {
     implementation(libs.androidx.mediarouter)
 
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Android Auto is a legacy MediaBrowserCompat/MediaControllerCompat client; these tests
+    // drive PlaybackService through that same compat surface (see AndroidAutoClientTest).
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.media.compat)
 }

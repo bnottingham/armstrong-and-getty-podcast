@@ -91,6 +91,41 @@ Media button preferences use Media3's **built-in icons**
 (theme-attr tints render malformed in notification shells). ±30s sits in the primary
 back/forward slots, ±10s in the secondary slots (surfaces on Auto/Wear).
 
+## Android Auto / MediaBrowser contract — read before touching PlaybackService
+
+Google Play rejected v2.0 with "App crashes when we attempted to test functionality"
+(Auto App Quality). The crash surface is the legacy `MediaBrowserService` +
+`MediaControllerCompat` IPC that Android Auto, Google Assistant, Bluetooth car decks, and
+System UI use. Media3 bridges it via `MediaSessionLegacyStub` / `MediaLibraryServiceLegacyStub`.
+Every rule below traces to a real failure; the regression suite is
+`Android/src/androidTest/.../media/AndroidAutoClientTest.kt` (drives the real compat surface
+on an emulator via `am instrument`) plus shared `MediaCatalogTest`.
+
+- **Grant library commands in `onConnect`.** Use
+  `DEFAULT_SESSION_AND_LIBRARY_COMMANDS`, not `DEFAULT_SESSION_COMMANDS`. Without
+  `COMMAND_CODE_LIBRARY_GET_LIBRARY_ROOT` the legacy stub returns a **null root** and
+  `MediaBrowserCompat.connect()` fails outright — Auto can't even open the app.
+- **Never hand ExoPlayer a URI-less MediaItem.** Auto/Assistant `playFromMediaId` /
+  `playFromSearch` funnel through `onSetMediaItems` with an item that has only a `mediaId`
+  or `requestMetadata.searchQuery` and **no** `localConfiguration`. Passing it straight to
+  ExoPlayer throws NPE in `DefaultMediaSourceFactory` and kills the whole process. The app's
+  own controller always sends items with URIs — distinguish on `localConfiguration != null`
+  and expand external requests via `MediaCatalog` into a real segment playlist.
+- **`MediaCatalog` (commonMain, Koin singleton) is the read model** behind the browse tree,
+  voice search, and resumption — derived entirely from `PodcastRepository`. It refreshes the
+  feed on demand when the DB is empty (fresh install opened first in the car) and exposes
+  undownloaded days as **streamable** (remote URL) so they play without a prior download.
+  Media ids: `episode:<date>` and `segment:<date>:<index>` (`CatalogMediaId.parse`).
+- **Playback resumption needs a manifest `MediaButtonReceiver`.** Media3's
+  `canResumePlaybackOnStart()` is false unless a `<receiver>` for `android.intent.action.MEDIA_BUTTON`
+  is declared, so System UI / Auto's `MediaResumeListener` probe gets `onConnectFailed`. The
+  manifest declares `androidx.media3.session.MediaButtonReceiver`; the service serves the
+  newest in-progress episode from `onPlaybackResumption`.
+- **Testing constraint:** the emulator's Android Auto is a **stub** (Play reports it
+  "isn't compatible") — the projected DHU UI can't run. Verify via `AndroidAutoClientTest`
+  (the identical IPC contract) and the media notification; full projected UI needs a phone +
+  head unit or the DHU on a Play-enabled image.
+
 ## Release CI & signing
 
 - Website: `docs/` → Firebase Hosting (`firebase deploy --only hosting`), live at
