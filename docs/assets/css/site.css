@@ -126,6 +126,9 @@ img { max-width: 100%; height: auto; }
   cursor: default;
 }
 .badge:hover { text-decoration: none; border-color: rgba(255, 255, 255, 0.45); }
+/* Only the badges that are real links behave like links; the rest stay inert. */
+.badge[href] { cursor: pointer; }
+.badge[href]:hover { border-color: rgba(255, 255, 255, 0.7); }
 .badge svg { width: 28px; height: 28px; flex: none; }
 .badge .badge-text { display: flex; flex-direction: column; line-height: 1.15; }
 .badge .badge-pre { font-size: 0.62rem; letter-spacing: 0.02em; opacity: 0.85; }
