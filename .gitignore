@@ -128,3 +128,8 @@ Packages/
 # "Compile Kotlin Framework" build phase (see iOS project) or
 # "Native Mobile/scripts/fetch_cast_sdk.sh"
 Native Mobile/iOS/Frameworks/GoogleCast.xcframework/
+
+# Node (promo screenshot tooling)
+node_modules/
+tools/promo-screenshots/.cache/
+tools/promo-screenshots/.staging/

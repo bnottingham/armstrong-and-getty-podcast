@@ -1,0 +1,14 @@
+{
+  "name": "ag-promo-screenshots",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Builds the App Store and Play Store promotional screenshot sets from raw device captures.",
+  "scripts": {
+    "build": "node buildPromoScreenshots.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.62.1",
+    "sharp": "^0.35.3"
+  }
+}
