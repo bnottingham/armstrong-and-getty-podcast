@@ -11,10 +11,10 @@
  *
  * Output, RGB with no alpha at each profile's exact store dimensions:
  *
- *   iphone-6.9      1320x2868   app-store/screenshots/iphone-6.9
- *   ipad-13         2064x2752   app-store/screenshots/ipad-13
- *   android-phone   1080x1920   play-store/screenshots/phone
- *   android-tablet  1440x2560   play-store/screenshots/tablet
+ *   iphone-6.9      1320x2868   screenshots/app-store/iphone-6.9
+ *   ipad-13         2064x2752   screenshots/app-store/ipad-13
+ *   android-phone   1080x1920   screenshots/play-store/phone
+ *   android-tablet  1440x2560   screenshots/play-store/tablet
  *
  * Seven slides per set — within Play's 8-per-device-type cap, so all four sets
  * are identical in content.
@@ -115,7 +115,7 @@ const PROFILES = {
     height: 2868,
     source: "ios/iphone-6.9",
     statusBarCrop: 186,
-    out: "app-store/screenshots/iphone-6.9",
+    out: "screenshots/app-store/iphone-6.9",
     L: {
           brandTop: 140,
       laurelW: 130,
@@ -160,7 +160,7 @@ const PROFILES = {
     height: 2752,
     source: "ios/ipad-13",
     statusBarCrop: 48,
-    out: "app-store/screenshots/ipad-13",
+    out: "screenshots/app-store/ipad-13",
     L: {
           brandTop: 160,
       laurelW: 196,
@@ -206,7 +206,7 @@ const PROFILES = {
     source: "android/phone",
     exclude: ["09-reviews"],
     statusBarCrop: 137,
-    out: "play-store/screenshots/phone",
+    out: "screenshots/play-store/phone",
     L: ANDROID_PHONE_LAYOUT,
   },
   // 1080x1920 and 1440x2560 are the same 9:16, so the tablet is exactly 4/3 of
@@ -217,7 +217,7 @@ const PROFILES = {
     source: "android/tablet",
     exclude: ["09-reviews"],
     statusBarCrop: 140,
-    out: "play-store/screenshots/tablet",
+    out: "screenshots/play-store/tablet",
     L: {
       ...scaleLayout(ANDROID_PHONE_LAYOUT, 4 / 3),
       heroDeviceWidth: 1640,
@@ -724,7 +724,7 @@ try {
     const excluded = new Set(profile.exclude ?? []);
     const profileSlides = slides.filter((slide) => !excluded.has(slide.id));
 
-    if (profile.out.startsWith("play-store/") && profileSlides.length > PLAY_MAX_SCREENSHOTS) {
+    if (profile.out.startsWith("screenshots/play-store/") && profileSlides.length > PLAY_MAX_SCREENSHOTS) {
       throw new Error(
         `${name} would upload ${profileSlides.length} screenshots; Play accepts at most ${PLAY_MAX_SCREENSHOTS} per device type.`,
       );

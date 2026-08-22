@@ -133,3 +133,6 @@ Native Mobile/iOS/Frameworks/GoogleCast.xcframework/
 node_modules/
 tools/promo-screenshots/.cache/
 tools/promo-screenshots/.staging/
+
+# Raw device captures the promo builder reads from — working files, not evidence.
+screenshots/ag-*/

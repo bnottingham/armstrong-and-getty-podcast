@@ -13,10 +13,10 @@ Source: `tools/promo-screenshots/buildPromoScreenshots.mjs`.
 
 | Profile | Dimensions | Slides | Output |
 |---|---|---|---|
-| `iphone-6.9` | 1320×2868 | 9 | `app-store/screenshots/iphone-6.9/` |
-| `ipad-13` | 2064×2752 | 9 | `app-store/screenshots/ipad-13/` |
-| `android-phone` | 1080×1920 | 8 | `play-store/screenshots/phone/` |
-| `android-tablet` | 1440×2560 | 8 | `play-store/screenshots/tablet/` |
+| `iphone-6.9` | 1320×2868 | 9 | `screenshots/app-store/iphone-6.9/` |
+| `ipad-13` | 2064×2752 | 9 | `screenshots/app-store/ipad-13/` |
+| `android-phone` | 1080×1920 | 8 | `screenshots/play-store/phone/` |
+| `android-tablet` | 1440×2560 | 8 | `screenshots/play-store/tablet/` |
 
 **Play caps every device type at 8 screenshots**, so the two Play profiles
 exclude the second review wall (`09-reviews`); the builder throws rather than
@@ -159,16 +159,29 @@ falling back to a system face and reflowing the art-directed line breaks.
   impersonation policy both look at whether promotional art implies an
   affiliation that does not exist.
 
-## Known content bugs visible in these captures
+## Content bugs fixed in this batch
 
-Both are in the RSS/episode text pipeline, not the screenshot tooling:
+Two RSS-parsing bugs were visible in the previous batch and are fixed in
+`RssFeedParser.kt` (covered by `RssFeedParserTest`):
 
-1. Episode descriptions render raw `&nbsp;` instead of a decoded space.
-2. Segment titles are duplicated
-   ("…Hour One**The Best Weekend Talk Show In America Hour One**").
+1. Episode descriptions rendered raw `&nbsp;`. `cleanDescription` had a
+   hand-rolled chain of `.replace()` calls with no NBSP case; it is now a
+   single-pass entity decoder covering named, decimal, and hex entities.
+2. Segment titles were duplicated. `<title>` and `<itunes:title>` share a
+   localName, and the parser matched on localName alone, so Omny's two title
+   elements concatenated. Matching is now namespace-aware per field —
+   `itunes:duration` is the one field deliberately still matched by name.
 
-Both appear in slides 3–5. Fix them, then regenerate the batch and rebuild
-before uploading.
+If a future batch shows literal entities again, re-run
+`cd "Native Mobile" && ./gradlew :shared:iosSimulatorArm64Test` first: the
+tests cover both regressions.
+
+**Clearing cached descriptions before re-capturing.** Parsed descriptions are
+persisted, so a parser fix does not change what an existing install shows.
+Erase the simulator (`xcrun simctl erase <UDID>`) or uninstall on Android
+before re-capturing, or the old text is captured again. `simctl terminate` can
+fail silently while the app keeps running and rewrites its data — erasing the
+device is the reliable path.
 
 ## Before uploading
 
