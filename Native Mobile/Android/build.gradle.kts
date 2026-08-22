@@ -12,8 +12,8 @@ android {
         applicationId = "com.nomnomsom.armstrongandgetty"
         minSdk = 26
         targetSdk = 37
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 4
-        versionName = (project.findProperty("versionName") as String?) ?: "2.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 6
+        versionName = (project.findProperty("versionName") as String?) ?: "2.0.2"
     }
 
     // CI signing: the release workflow decodes the upload keystore from GitHub
