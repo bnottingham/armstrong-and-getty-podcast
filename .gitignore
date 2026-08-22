@@ -136,3 +136,6 @@ tools/promo-screenshots/.staging/
 
 # Raw device captures the promo builder reads from — working files, not evidence.
 screenshots/ag-*/
+
+# Firebase CLI deploy cache
+.firebase/
