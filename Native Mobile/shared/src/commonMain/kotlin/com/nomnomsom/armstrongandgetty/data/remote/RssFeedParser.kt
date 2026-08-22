@@ -51,12 +51,17 @@ class RssFeedParser(
         var audioUrl = ""
         var durationSeconds = 0L
         var currentTag = ""
+        // Captured at START_ELEMENT: the reader only exposes a prefix there, and
+        // matching on localName alone makes <itunes:title> indistinguishable from
+        // <title>. Omny sends both, which used to concatenate the title twice.
+        var currentTagPrefixed = false
 
         try {
             while (reader.hasNext()) {
                 when (reader.next()) {
                     EventType.START_ELEMENT -> {
                         currentTag = reader.localName
+                        currentTagPrefixed = reader.prefix.isNotEmpty()
                         if (currentTag == "item") {
                             inItem = true
                             title = ""
@@ -76,14 +81,19 @@ class RssFeedParser(
 
                     EventType.TEXT, EventType.CDSECT, EventType.ENTITY_REF -> {
                         if (inItem) {
-                            val text = reader.text.trim()
-                            if (text.isNotEmpty()) {
-                                when (currentTag) {
-                                    "title" -> title += text
-                                    "description" -> description += text
-                                    "pubDate" -> pubDate += text
-                                    "duration" -> durationSeconds = parseDuration(text)
-                                }
+                            // Accumulated raw, trimmed once at the end: a text node
+                            // split around an entity ("Armstrong &amp; Getty" arrives
+                            // as three events) loses its spaces if each fragment is
+                            // trimmed individually.
+                            val text = reader.text
+                            when {
+                                currentTag == "title" && !currentTagPrefixed -> title += text
+                                currentTag == "description" && !currentTagPrefixed -> description += text
+                                currentTag == "pubDate" && !currentTagPrefixed -> pubDate += text
+                                // itunes:duration is the only field we read from a
+                                // prefixed element, so it is matched by name alone.
+                                currentTag == "duration" -> durationSeconds = parseDuration(text.trim())
+                                else -> Unit
                             }
                         }
                     }
@@ -94,9 +104,9 @@ class RssFeedParser(
                             if (audioUrl.isNotEmpty()) {
                                 items.add(
                                     RssItem(
-                                        title = title,
+                                        title = title.trim(),
                                         description = cleanDescription(description),
-                                        pubDate = pubDate,
+                                        pubDate = pubDate.trim(),
                                         audioUrl = audioUrl,
                                         durationSeconds = durationSeconds
                                     )
@@ -137,14 +147,69 @@ class RssFeedParser(
     }
 
     private fun cleanDescription(html: String): String {
-        return html
-            .replace(Regex("<[^>]*>"), "")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
+        return decodeHtmlEntities(html.replace(Regex("<[^>]*>"), ""))
+            // A decoded NBSP is not matched by \s, so it would survive the collapse
+            // below and show up as a stray double space.
+            .replace('\u00A0', ' ')
             .replace(Regex("\\s+"), " ")
             .trim()
+    }
+}
+
+private val ENTITY_PATTERN = Regex("&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);")
+
+private val NAMED_ENTITIES = mapOf(
+    "amp" to "&",
+    "lt" to "<",
+    "gt" to ">",
+    "quot" to "\"",
+    "apos" to "'",
+    "nbsp" to "\u00A0",
+    "hellip" to "\u2026",
+    "mdash" to "\u2014",
+    "ndash" to "\u2013",
+    "lsquo" to "\u2018",
+    "rsquo" to "\u2019",
+    "ldquo" to "\u201C",
+    "rdquo" to "\u201D",
+    "bull" to "\u2022",
+    "middot" to "\u00B7",
+    "deg" to "\u00B0",
+    "trade" to "\u2122",
+    "copy" to "\u00A9",
+    "reg" to "\u00AE"
+)
+
+/**
+ * Decodes the HTML entities that survive inside a CDATA description, which the XML
+ * reader hands back verbatim.
+ *
+ * One left-to-right pass, deliberately: a chain of `.replace("&amp;", "&")` calls
+ * decodes `&amp;lt;` twice and turns escaped markup back into a live tag. Scanning
+ * once means the text produced by a replacement is never re-examined.
+ *
+ * Unknown entities are left exactly as they were found rather than dropped, so a
+ * feed change shows up as visible text instead of silently missing words.
+ */
+internal fun decodeHtmlEntities(text: String): String =
+    ENTITY_PATTERN.replace(text) { match ->
+        val body = match.groupValues[1]
+        when {
+            body.startsWith("#x") || body.startsWith("#X") ->
+                codePointToString(body.drop(2).toIntOrNull(16)) ?: match.value
+            body.startsWith("#") ->
+                codePointToString(body.drop(1).toIntOrNull()) ?: match.value
+            else -> NAMED_ENTITIES[body.lowercase()] ?: match.value
+        }
+    }
+
+private fun codePointToString(codePoint: Int?): String? = when {
+    codePoint == null || codePoint <= 0 || codePoint > 0x10FFFF -> null
+    // Lone surrogates are not valid scalar values; leave the entity untouched.
+    codePoint in 0xD800..0xDFFF -> null
+    codePoint <= 0xFFFF -> Char(codePoint).toString()
+    else -> {
+        val v = codePoint - 0x10000
+        charArrayOf(Char(0xD800 + (v shr 10)), Char(0xDC00 + (v and 0x3FF))).concatToString()
     }
 }
