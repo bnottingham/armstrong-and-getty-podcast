@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /foreground-service
+Disallow: /assets/compliance/
 
 Sitemap: https://armstrong-and-getty-podcast.web.app/sitemap.xml

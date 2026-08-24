@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foreground Service Use — Armstrong &amp; Getty Podcast App</title>
+  <meta name="description" content="How the Armstrong &amp; Getty Podcast App uses the mediaPlayback foreground service type, with a video demonstration of the feature.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="canonical" href="https://armstrong-and-getty-podcast.web.app/foreground-service">
+  <link rel="icon" type="image/svg+xml" href="assets/img/icon.svg">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <meta name="theme-color" content="#0e0f13">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="./">
+        <img src="assets/img/icon.svg" alt="" width="34" height="34">
+        <span class="brand-name">Armstrong &amp; Getty <span class="brand-suffix">Podcast App</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="./#features">Features</a>
+        <a href="support">Support</a>
+        <a href="privacy">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="prose">
+    <h1>Foreground service use</h1>
+    <p class="updated">Package <code>com.nomnomsom.armstrongandgetty</code> &middot; declared type <code>mediaPlayback</code></p>
+
+    <div class="callout">
+      <p><strong>Summary.</strong> The app is an audio podcast player. It uses a
+      <code>mediaPlayback</code> foreground service for one thing only: to keep the
+      episode the user started playing audible after they leave the app or lock the
+      screen, with an ongoing media notification that shows what is playing and lets
+      them control it.</p>
+    </div>
+
+    <h2>Video demonstration</h2>
+    <p>The recording below shows the full flow: starting an episode, leaving the app,
+    background playback continuing with the media notification, controlling playback
+    from that notification, and returning to the app with playback uninterrupted.</p>
+
+    <video
+      controls
+      preload="metadata"
+      playsinline
+      poster="assets/compliance/foreground-service-poster.jpg"
+      style="width:100%;max-width:340px;display:block;margin:1.5rem auto;border-radius:14px;background:#101115">
+      <source src="assets/compliance/foreground-service-media-playback.mp4" type="video/mp4">
+      Your browser cannot play this video.
+      <a href="assets/compliance/foreground-service-media-playback.mp4">Download the MP4</a>.
+    </video>
+
+    <p style="text-align:center">
+      <a href="assets/compliance/foreground-service-media-playback.mp4">Direct link to the video file (MP4)</a>
+    </p>
+
+    <h2>Declared permissions</h2>
+    <ul>
+      <li><code>android.permission.FOREGROUND_SERVICE</code></li>
+      <li><code>android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK</code></li>
+    </ul>
+    <p>The service is declared in the manifest as
+    <code>android:foregroundServiceType="mediaPlayback"</code> and is implemented with
+    Jetpack Media3 (<code>MediaLibraryService</code>), which posts the standard
+    system media notification.</p>
+
+    <h2>When the service starts and stops</h2>
+    <ul>
+      <li><strong>Starts</strong> only when the user presses play on an episode.</li>
+      <li><strong>Runs</strong> only while audio is playing or paused mid-episode, so the
+      user keeps a lock-screen and notification control they can return to.</li>
+      <li><strong>Stops</strong> when playback finishes, when the user stops playback, or
+      when the user dismisses the media notification.</li>
+    </ul>
+    <p>The service is never started from the background, never started at boot, and does
+    no work unrelated to playing the audio the user asked for.</p>
+
+    <h2>Why a foreground service is required</h2>
+    <p>Continuing audio after the user leaves the app is the core, user-visible purpose of
+    a podcast player, and it is the use case Android documents for the
+    <code>mediaPlayback</code> service type. Without it, playback would be killed as soon
+    as the app was backgrounded or the screen locked, and the media notification and
+    lock-screen controls would disappear.</p>
+
+    <h2>Questions</h2>
+    <p>Contact the developer at
+    <a href="mailto:brett@nomnomsom.com?subject=Armstrong%20%26%20Getty%20App%20—%20Foreground%20service">brett@nomnomsom.com</a>.</p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="cols">
+        <nav aria-label="Footer">
+          <a href="./">Home</a>
+          <a href="support">Support</a>
+          <a href="privacy">Privacy Policy</a>
+          <a href="terms">Terms of Use</a>
+        </nav>
+        <p style="margin:0">© 2026 nomnomsom.com</p>
+      </div>
+      <p class="disclaimer">
+        This is an unofficial companion app and website, not affiliated with, endorsed by,
+        or sponsored by Armstrong&nbsp;&amp;&nbsp;Getty, iHeartMedia, or their affiliates.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
