@@ -13,14 +13,13 @@ Source: `tools/promo-screenshots/buildPromoScreenshots.mjs`.
 
 | Profile | Dimensions | Slides | Output |
 |---|---|---|---|
-| `iphone-6.9` | 1320×2868 | 9 | `screenshots/app-store/iphone-6.9/` |
-| `ipad-13` | 2064×2752 | 9 | `screenshots/app-store/ipad-13/` |
-| `android-phone` | 1080×1920 | 8 | `screenshots/play-store/phone/` |
-| `android-tablet` | 1440×2560 | 8 | `screenshots/play-store/tablet/` |
+| `iphone-6.9` | 1320×2868 | 7 | `screenshots/app-store/iphone-6.9/` |
+| `ipad-13` | 2064×2752 | 7 | `screenshots/app-store/ipad-13/` |
+| `android-phone` | 1080×1920 | 7 | `screenshots/play-store/phone/` |
+| `android-tablet` | 1440×2560 | 7 | `screenshots/play-store/tablet/` |
 
-**Play caps every device type at 8 screenshots**, so the two Play profiles
-exclude the second review wall (`09-reviews`); the builder throws rather than
-silently truncating if a Play profile is ever configured past 8. It also prunes
+**Play caps every device type at 8 screenshots**; the builder throws rather
+than silently truncating if a Play profile is ever configured past 8. It also prunes
 any PNG in an output folder that is not in the current slide list, so a renamed
 or dropped slide cannot leave an orphan sitting in the upload folder. Every output is RGB PNG with no alpha channel: App
 Store Connect rejects alpha and Play requires "24-bit PNG (no alpha)". The
@@ -33,7 +32,7 @@ Flags: `--profile=android-phone`, `--only=04`, `--batch=ag-M-D-YY`.
 ## Capturing the raw sources
 
 `screenshots/<batch>/{ios,android}/<profile>/` holds the raw device captures.
-They are real app screenshots, not mockups. Four states per profile:
+They are real app screenshots, not mockups. Six states per profile:
 
 | File | State |
 |---|---|
@@ -105,18 +104,20 @@ Re-measure it if the emulator density changes.
 | # | File | Slot |
 |---|------|------|
 | 1 | `01-hero.png` | Fly-in hero — wordmark, laurel-framed line, tilted device |
-| 2 | `02-reviews.png` | Five-star review wall |
-| 3 | `03-episodes.png` | Episode list |
-| 4 | `04-player.png` | Player and skip controls |
-| 5 | `05-downloads.png` | Offline downloads |
-| 6 | `06-catalog.png` | Back catalogue |
-| 7 | `07-more.png` | More from A&G |
-| 8 | `08-about.png` | About the show |
-| 9 | `09-reviews.png` | Five-star review wall — **iOS only** |
+| 2 | `03-episodes.png` | Episode list |
+| 3 | `04-player.png` | Player and skip controls |
+| 4 | `05-downloads.png` | Offline downloads |
+| 5 | `06-catalog.png` | Back catalogue |
+| 6 | `07-more.png` | More from A&G |
+| 7 | `08-about.png` | About the show |
 
-Each feature slide (3–8) pairs a two-line serif headline with a short quoted
-review fragment, exactly as the review walls do — the fragment is always a real
-excerpt, never invented copy.
+Ids `02` and `09` are retired: they were five-star review walls, removed after
+Google Play rejected the Aug 2026 submission under its Metadata policy. The
+remaining ids are deliberately not renumbered, so the files on disk keep the
+names of the assets already uploaded to both stores.
+
+Each feature slide pairs a two-line serif headline with a short quoted review
+fragment — the fragment is always a real excerpt, never invented copy.
 
 Measurements are stated per profile in the builder's `PROFILES` map. The two
 Play profiles share a shape (both 9:16), so the tablet is
@@ -134,7 +135,7 @@ Palette comes from the app's own Compose theme
 gold, `#F0EDE6` text.
 
 Type is **Playfair Display** for headlines and quotations and **Inter** for the
-uppercase review-wall eyebrows and the hero kicker. The app itself declares no
+uppercase hero kicker. The app itself declares no
 custom typeface (Compose renders SF on iOS, Roboto on Android), so the promo
 face is a deliberate marketing choice: a high-contrast news serif that suits a
 talk-radio show and gives the set the same editorial weight as the sibling
@@ -144,7 +145,12 @@ falling back to a system face and reflowing the art-directed line breaks.
 
 ## Copy rules
 
-- **Review text is quotation, trimmed.** Every quote on slides 2 and 7 is a
+- **No review walls or star ratings — ever.** Google Play rejected the Aug
+  2026 submission under its Metadata policy over the five-star testimonial
+  slides (the app was unavailable until they were removed from the listing and
+  the release was resubmitted). Star imagery and testimonial walls must not
+  return to any set, Play or App Store.
+- **Review text is quotation, trimmed.** Every feature-slide quote is a
   shortened excerpt of a real supplied review, cut to 10–13 words so it stays
   legible at store-thumbnail size. Do not paraphrase a review into something
   the reviewer did not say, and never fabricate one: invented testimonials

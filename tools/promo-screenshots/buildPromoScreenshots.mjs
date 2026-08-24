@@ -85,16 +85,6 @@ const ANDROID_PHONE_LAYOUT = {
   heroDeviceWidth: 1120,
   heroDeviceRotate: -15,
 
-  claimsPadTop: 150,
-  claimsPadX: 90,
-  claimsPadBottom: 220,
-  eyebrow: 52,
-  rule: 88,
-  ruleWeight: 6,
-  claimTop: 34,
-  claim: 56,
-  claimMax: 880,
-
   featurePadTop: 110,
   featureHeadline: 90,
   featureHeadlineMax: 940,
@@ -131,16 +121,6 @@ const PROFILES = {
       heroDeviceWidth: 1216,
       heroDeviceRotate: -15,
 
-      claimsPadTop: 206,
-      claimsPadX: 116,
-      claimsPadBottom: 300,
-      eyebrow: 65,
-      rule: 110,
-      ruleWeight: 7,
-      claimTop: 44,
-      claim: 70,
-      claimMax: 1020,
-
       featurePadTop: 168,
       featureHeadline: 112,
       featureHeadlineMax: 1140,
@@ -176,16 +156,6 @@ const PROFILES = {
       heroDeviceWidth: 2150,
       heroDeviceRotate: -10,
 
-      claimsPadTop: 262,
-      claimsPadX: 210,
-      claimsPadBottom: 400,
-      eyebrow: 100,
-      rule: 160,
-      ruleWeight: 10,
-      claimTop: 56,
-      claim: 100,
-      claimMax: 1700,
-
       featurePadTop: 190,
       featureHeadline: 168,
       featureHeadlineMax: 1780,
@@ -204,7 +174,6 @@ const PROFILES = {
     width: 1080,
     height: 1920,
     source: "android/phone",
-    exclude: ["09-reviews"],
     statusBarCrop: 137,
     out: "screenshots/play-store/phone",
     L: ANDROID_PHONE_LAYOUT,
@@ -215,7 +184,6 @@ const PROFILES = {
     width: 1440,
     height: 2560,
     source: "android/tablet",
-    exclude: ["09-reviews"],
     statusBarCrop: 140,
     out: "screenshots/play-store/tablet",
     L: {
@@ -231,11 +199,13 @@ const PLAY_MAX_SCREENSHOTS = 8;
 /* ------------------------------------------------------------------ *
  * Copy.
  *
- * Slides 2 and 7 are five-star review walls. Every quotation is a trimmed
- * excerpt of a real supplied review, cut to 10-13 words so it stays legible at
- * store-thumbnail size. Never fabricate a review here: invented testimonials
- * deceive the people reading the listing and are grounds for removal under
- * both Apple's and Google's policies.
+ * No review-wall slides: Google Play rejected the Aug 2026 submission under
+ * its Metadata policy over the five-star testimonial slides, so star ratings
+ * and review walls must never return to any set. The short quotes on the
+ * feature slides are trimmed excerpts of real supplied reviews, cut to 10-13
+ * words so they stay legible at store-thumbnail size. Never fabricate a
+ * review: invented testimonials deceive the people reading the listing and
+ * are grounds for removal under both Apple's and Google's policies.
  * ------------------------------------------------------------------ */
 
 const slides = [
@@ -246,17 +216,6 @@ const slides = [
     headline: "Never Miss\nThe Show.",
     kicker: "Podcast · On Demand",
     shot: "01-episodes.png",
-  },
-  {
-    id: "02-reviews",
-    kind: "reviews",
-    eyebrow: "Built for one thing:\nnever missing the show.",
-    // 12 / 10 / 12 words.
-    quotes: [
-      "Full daily show stitched into one clean episode. Offline is a game-changer.",
-      "Grab the entire show with one tap. No signal issues.",
-      "Jump to segments, change speed, and it remembers where I left off.",
-    ],
   },
   {
     id: "03-episodes",
@@ -300,17 +259,6 @@ const slides = [
     quote: "No ads, no account, no clutter.",
     shot: "04-about.png",
   },
-  {
-    id: "09-reviews",
-    kind: "reviews",
-    eyebrow: "The show,\non demand.",
-    // 11 / 11 / 12 words.
-    quotes: [
-      "No ads, no account, no clutter. Just the full daily broadcast.",
-      "Great for listening on my schedule. Full day assembled in order.",
-      "Longtime A&G listener. One clean episode per day, offline access, smooth controls.",
-    ],
-  },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -324,9 +272,6 @@ const escapeHtml = (value) =>
     .replace(/>/g, "&gt;");
 
 const lines = (value) => escapeHtml(value).replace(/\n/g, "<br>");
-
-const star = `<svg class="star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.6l3.09 6.83 7.41.79-5.55 5.02 1.56 7.36L12 17.85 5.49 21.6l1.56-7.36L1.5 9.22l7.41-.79z"/></svg>`;
-const starRow = `<div class="stars">${star.repeat(5)}</div>`;
 
 /**
  * A laurel half-wreath — the right-hand branch; the left copy is mirrored in
@@ -494,20 +439,6 @@ const buildCss = ({ width, height, L }) => `
     color: rgba(240, 237, 230, 0.74);
   }
 
-  /* Star row — sized off the same rhythm metric the claim rule used, so the
-     four profiles keep their proportions without four more numbers. */
-  .stars {
-    display: flex;
-    justify-content: center;
-    gap: ${Math.round(L.rule * 0.18)}px;
-  }
-
-  .star {
-    width: ${Math.round(L.rule * 0.56)}px;
-    height: ${Math.round(L.rule * 0.56)}px;
-    fill: ${T.gold};
-  }
-
   /* ---- device ---- */
 
   .phone {
@@ -580,42 +511,7 @@ const buildCss = ({ width, height, L }) => `
     transform: rotate(${L.heroDeviceRotate}deg);
   }
 
-  /* ---- 2 / 7: review wall ---- */
-
-  .reviews {
-    padding: ${L.claimsPadTop}px ${L.claimsPadX}px ${L.claimsPadBottom}px;
-    justify-content: flex-start;
-  }
-
-  .reviews-eyebrow {
-    font-size: ${L.eyebrow}px;
-    font-weight: 700;
-    line-height: 1.28;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  .review-list {
-    flex: 1;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    padding-top: ${Math.round(L.claimTop * 0.6)}px;
-  }
-
-  .review-quote {
-    margin-top: ${L.claimTop}px;
-    font-family: "Playfair Display", Georgia, serif;
-    font-size: ${L.claim}px;
-    font-weight: 400;
-    line-height: 1.34;
-    color: ${T.textPrimary};
-    max-width: ${L.claimMax}px;
-    margin-inline: auto;
-  }
-
-  /* ---- 3-6: feature ---- */
+  /* ---- feature slides ---- */
 
   .feature { padding-top: ${L.featurePadTop}px; }
 
@@ -653,19 +549,6 @@ const renderSlide = (slide, shotsDir) => {
       </div>
       <div class="hero-kicker">${escapeHtml(slide.kicker)}</div>
       <div class="hero-phone">${phone(slide.shot)}</div>
-    </div>`;
-  }
-
-  if (slide.kind === "reviews") {
-    const items = slide.quotes
-      .map(
-        (quote) =>
-          `<div>${starRow}<div class="review-quote">&ldquo;${lines(quote)}&rdquo;</div></div>`,
-      )
-      .join("");
-    return `<div class="slide reviews">
-      <div class="reviews-eyebrow">${lines(slide.eyebrow)}</div>
-      <div class="review-list">${items}</div>
     </div>`;
   }
 
@@ -721,17 +604,14 @@ try {
     const shotsDir = path.join(ROOT, "screenshots", batch, profile.source);
     const outDir = path.join(ROOT, profile.out);
 
-    const excluded = new Set(profile.exclude ?? []);
-    const profileSlides = slides.filter((slide) => !excluded.has(slide.id));
-
-    if (profile.out.startsWith("screenshots/play-store/") && profileSlides.length > PLAY_MAX_SCREENSHOTS) {
+    if (profile.out.startsWith("screenshots/play-store/") && slides.length > PLAY_MAX_SCREENSHOTS) {
       throw new Error(
-        `${name} would upload ${profileSlides.length} screenshots; Play accepts at most ${PLAY_MAX_SCREENSHOTS} per device type.`,
+        `${name} would upload ${slides.length} screenshots; Play accepts at most ${PLAY_MAX_SCREENSHOTS} per device type.`,
       );
     }
 
     const present = new Set(await readdir(shotsDir));
-    for (const slide of profileSlides) {
+    for (const slide of slides) {
       if (slide.shot && !present.has(slide.shot)) {
         throw new Error(`Missing source capture ${slide.shot} in ${shotsDir}`);
       }
@@ -744,7 +624,7 @@ try {
     const framedDir = path.join(staging, `${name}-shots`);
     await mkdir(framedDir, { recursive: true });
     const framed = new Map();
-    for (const shot of new Set(profileSlides.filter((s) => s.shot).map((s) => s.shot))) {
+    for (const shot of new Set(slides.filter((s) => s.shot).map((s) => s.shot))) {
       const meta = await sharp(path.join(shotsDir, shot)).metadata();
       const height = meta.height - profile.statusBarCrop;
       await sharp(path.join(shotsDir, shot))
@@ -757,7 +637,7 @@ try {
     // The template requires every device to run off the bottom edge. A capture
     // whose aspect leaves it floating mid-canvas is a layout bug, not a style
     // choice — catch it here rather than in App Store review.
-    for (const slide of profileSlides.filter((s) => s.kind === "feature")) {
+    for (const slide of slides.filter((s) => s.kind === "feature")) {
       const meta = framed.get(slide.shot);
       const screenH = (profile.L.deviceWidth - profile.L.bezelPad * 2) * (meta.height / meta.width);
       const bottom = profile.L.deviceTop + screenH + profile.L.bezelPad * 2;
@@ -775,7 +655,7 @@ try {
     // dropped slide leaves an orphan PNG sitting in the upload folder, which
     // is the kind of thing that only gets noticed in App Store Connect.
     if (!only) {
-      const expected = new Set(profileSlides.map((slide) => `${slide.id}.png`));
+      const expected = new Set(slides.map((slide) => `${slide.id}.png`));
       for (const file of await readdir(outDir)) {
         if (file.endsWith(".png") && !expected.has(file)) {
           await rm(path.join(outDir, file));
@@ -792,7 +672,7 @@ try {
     console.log(`\n${name} (${profile.width}x${profile.height}) ← ${batch}`);
 
     const written = [];
-    for (const slide of profileSlides) {
+    for (const slide of slides) {
       if (only && !slide.id.startsWith(only)) continue;
 
       const htmlPath = path.join(staging, `${name}-${slide.id}.html`);
