@@ -28,12 +28,26 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.nomnomsom.armstrongandgetty.data.model.displayLabel
+import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_LOCAL_PATH
 import com.nomnomsom.armstrongandgetty.media.PlaybackController.Companion.EXTRA_REMOTE_URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.guava.future
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import java.io.File
 
 @OptIn(UnstableApi::class)
-class PlaybackService : MediaLibraryService() {
+class PlaybackService : MediaLibraryService(), KoinComponent {
+
+    private val repository: PodcastRepository by inject()
+
+    /** Backs Android Auto's browse tree and the mediaId-only items it hands back when tapped. */
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var exoPlayer: ExoPlayer? = null
     private var castPlayer: CastPlayer? = null
@@ -202,6 +216,7 @@ class PlaybackService : MediaLibraryService() {
         exoPlayer = null
         castPlayer?.release()
         castPlayer = null
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -248,9 +263,14 @@ class PlaybackService : MediaLibraryService() {
                 .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
                 .build()
 
+            // Auto's browse tree calls (onGetLibraryRoot/onGetChildren) are gated behind the
+            // library commands, not just the session commands — granting only
+            // DEFAULT_SESSION_COMMANDS makes MediaSessionStub reject every browse request with
+            // RESULT_ERROR_NOT_SUPPORTED before it ever reaches this callback, which Android
+            // Auto surfaces as "doesn't seem to be working right now".
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(
-                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                         .add(SessionCommand("BACKWARD_30", Bundle.EMPTY))
                         .add(SessionCommand("BACKWARD_10", Bundle.EMPTY))
                         .add(SessionCommand("FORWARD_10", Bundle.EMPTY))
@@ -268,6 +288,10 @@ class PlaybackService : MediaLibraryService() {
          * or appended WHILE a Cast session is active reach the receiver as streamable
          * https URLs. Without this, the receiver's queue load fails silently and
          * play() is a no-op.
+         *
+         * External controllers (Android Auto tapping a browsed episode) instead send a
+         * single mediaId-only item with no URI at all — those are expanded into the day's
+         * real segment playlist below, rather than handed to ExoPlayer with nothing to play.
          */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
@@ -276,6 +300,20 @@ class PlaybackService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val episodeRequest = mediaItems.singleOrNull()?.takeIf {
+                it.localConfiguration == null && it.mediaId.startsWith(EPISODE_MEDIA_ID_PREFIX)
+            }
+            if (episodeRequest != null) {
+                return serviceScope.future {
+                    val date = episodeRequest.mediaId.removePrefix(EPISODE_MEDIA_ID_PREFIX)
+                    val expanded = buildPlaylistForDay(date)
+                    MediaSession.MediaItemsWithStartPosition(
+                        expanded.ifEmpty { resolveUrisForActivePlayer(mediaItems) },
+                        0,
+                        0L
+                    )
+                }
+            }
             return Futures.immediateFuture(
                 MediaSession.MediaItemsWithStartPosition(
                     resolveUrisForActivePlayer(mediaItems),
@@ -290,9 +328,56 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
+            val episodeRequest = mediaItems.singleOrNull()?.takeIf {
+                it.localConfiguration == null && it.mediaId.startsWith(EPISODE_MEDIA_ID_PREFIX)
+            }
+            if (episodeRequest != null) {
+                return serviceScope.future {
+                    val date = episodeRequest.mediaId.removePrefix(EPISODE_MEDIA_ID_PREFIX)
+                    buildPlaylistForDay(date).ifEmpty { resolveUrisForActivePlayer(mediaItems) }
+                        .toMutableList()
+                }
+            }
             return Futures.immediateFuture(
                 resolveUrisForActivePlayer(mediaItems).toMutableList()
             )
+        }
+
+        /** Expands a browsed day into its real, playable segment MediaItems. */
+        private suspend fun buildPlaylistForDay(date: String): List<MediaItem> {
+            val day = repository.getDayByDate(date) ?: return emptyList()
+            val segments = repository.parseSegments(day.segmentsJson)
+            if (segments.isEmpty()) return emptyList()
+            val filePaths = repository.getSegmentFilePaths(date, segments.size)
+
+            return segments.mapIndexedNotNull { index, segment ->
+                val localPath = filePaths.getOrNull(index)?.takeIf { File(it).length() > 0 }
+                val uri = when {
+                    localPath != null -> Uri.parse("file://$localPath")
+                    segment.audioUrl.isNotBlank() -> Uri.parse(segment.audioUrl)
+                    else -> return@mapIndexedNotNull null
+                }
+                val extras = Bundle().apply {
+                    putString(EXTRA_REMOTE_URL, segment.audioUrl)
+                    localPath?.let { putString(EXTRA_LOCAL_PATH, it) }
+                }
+                MediaItem.Builder()
+                    .setMediaId("$EPISODE_MEDIA_ID_PREFIX$date#$index")
+                    .setUri(uri)
+                    .setMimeType(MimeTypes.AUDIO_MPEG)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle("${day.title} — ${segment.displayLabel}")
+                            .setArtist("Armstrong & Getty")
+                            .setAlbumTitle("Armstrong & Getty On Demand")
+                            .setTrackNumber(index + 1)
+                            .setIsBrowsable(false)
+                            .setIsPlayable(true)
+                            .setExtras(extras)
+                            .build()
+                    )
+                    .build()
+            }
         }
 
         override fun onCustomCommand(
@@ -321,7 +406,7 @@ class PlaybackService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val rootItem = MediaItem.Builder()
-                .setMediaId("ROOT")
+                .setMediaId(ROOT_ID)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setIsBrowsable(true)
@@ -341,7 +426,49 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
+            if (parentId != ROOT_ID) {
+                return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
+            }
+            return serviceScope.future {
+                LibraryResult.ofItemList(ImmutableList.copyOf(loadBrowsableDays()), params)
+            }
         }
+
+        /**
+         * Android Auto can bind straight to this service without the app UI ever having run,
+         * so the RSS feed that normally gets primed by [EpisodeListViewModel]'s init or the
+         * periodic worker may never have fired. Refresh once if the local catalog is empty
+         * so a fresh install still has something to browse.
+         */
+        private suspend fun loadBrowsableDays(): List<MediaItem> {
+            var days = repository.getAllDaysSnapshot()
+            if (days.isEmpty()) {
+                repository.refreshFeed()
+                days = repository.getAllDaysSnapshot()
+            }
+            return days
+                .filter { it.segmentCount > 0 }
+                .sortedByDescending { it.date }
+                .take(30)
+                .map { day ->
+                    MediaItem.Builder()
+                        .setMediaId("$EPISODE_MEDIA_ID_PREFIX${day.date}")
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(day.title)
+                                .setArtist("Armstrong & Getty")
+                                .setAlbumTitle("Armstrong & Getty On Demand")
+                                .setIsBrowsable(false)
+                                .setIsPlayable(true)
+                                .build()
+                        )
+                        .build()
+                }
+        }
+    }
+
+    private companion object {
+        private const val ROOT_ID = "ROOT"
+        private const val EPISODE_MEDIA_ID_PREFIX = "episode:"
     }
 }
