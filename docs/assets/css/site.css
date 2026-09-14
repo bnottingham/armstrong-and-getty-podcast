@@ -133,13 +133,6 @@ img { max-width: 100%; height: auto; }
 .badge .badge-text { display: flex; flex-direction: column; line-height: 1.15; }
 .badge .badge-pre { font-size: 0.62rem; letter-spacing: 0.02em; opacity: 0.85; }
 .badge .badge-store { font-size: 1.12rem; font-weight: 600; letter-spacing: 0.01em; }
-.badge .soon {
-  position: absolute; top: -9px; right: -8px;
-  background: var(--gold); color: var(--bg);
-  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em;
-  padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
-}
-.badges-note { color: var(--muted); font-size: 0.82rem; margin: 10px 0 0; }
 
 /* Phone frames */
 .hero-art { display: flex; justify-content: center; }
