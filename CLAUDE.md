@@ -129,12 +129,12 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
 - **Storage is new-keys-only:** Android prefs file `in_app_review`, iOS NSUserDefaults keys
   prefixed `in_app_review.`. Never reuse `user_deletions` / Room / `podcasts/`
   (`ReviewStateStoreTest` enforces it).
-- **Android auto-prompt is OFF** (`ANDROID_AUTO_PROMPT_ENABLED` in
-  `androidMain/.../review/AndroidReviewEnvironment.kt`) until a Wi-Fi-only download
-  setting ships (`seo/strategy.md` §4.4). Meanwhile every moment is a dry run (nothing is
-  spent or shown). Listening days accumulate only while the phone UI is running: an
-  Android Auto-only session earns none until `PlaybackService` also feeds the tracker —
-  do that before flipping the switch (see the checklist on the constant).
+- **Android auto-prompt is ON** (`ANDROID_AUTO_PROMPT_ENABLED` in
+  `androidMain/.../review/AndroidReviewEnvironment.kt`, flipped 2026-10-14 by Brett's call;
+  `false` makes every moment a logged dry run). New hours still download on any network,
+  so a Wi-Fi-only download setting is the next ratings-safety item. Listening days
+  accumulate only while the phone UI is running: Android Auto-only listening earns none
+  until `PlaybackService` also feeds the tracker (an undercount, never an over-ask).
 - **Verify:** `./gradlew :shared:iosSimulatorArm64Test`; logcat / Xcode console tag
   `InAppReview` prints `skip <moment>: <reason>` or `requested …`. The iOS sheet never
   appears in TestFlight (development builds only); the Play card only on a Play-installed

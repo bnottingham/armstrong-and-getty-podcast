@@ -7,19 +7,14 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.nomnomsom.armstrongandgetty.util.AppLog
 
 /**
- * Android auto-prompt switch. Ships OFF: seo/strategy.md §4.4 (P2) and open question 11 —
- * new hours download on any network today, so prompting before a Wi-Fi-only download
- * setting exists invites "ate my data" reviews. Meanwhile every moment is a dry run that
- * logs `in_app_review_would_request` / `in_app_review_skipped` (nothing is spent or shown).
- * The About "Rate the App" row works regardless.
- *
- * Before flipping this to `true`:
- * - ship the Wi-Fi-only download setting;
- * - credit listening from PlaybackService too: today only the phone UI's PlaybackController
- *   feeds the tracker, so Android Auto-only listening earns no qualifying days;
- * - check the dry-run counts in Firebase.
+ * Android auto-prompt switch. ON since 2026-10-14 (Brett's call: ship the prompt on both
+ * platforms now, rather than waiting for the Wi-Fi-only download setting that
+ * seo/strategy.md §4.4 suggested first). Setting it to `false` turns every moment into a dry
+ * run that only logs `in_app_review_would_request` / `in_app_review_skipped`.
+ * Known gap: only the phone UI's PlaybackController feeds the listening tracker, so Android
+ * Auto-only listening earns no qualifying days (an undercount, so it never over-asks).
  */
-const val ANDROID_AUTO_PROMPT_ENABLED = false
+const val ANDROID_AUTO_PROMPT_ENABLED = true
 
 class AndroidReviewEnvironment(private val context: Context) : ReviewEnvironment {
 
