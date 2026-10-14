@@ -277,6 +277,12 @@ You have 0 ratings on both stores. On your own #1 App Store results you sit next
 Clay and Buck 145). A realistic goal is **30–50 per store**.
 
 **Decide one of these:**
+> **SHIPPED 2026-10-14 (Brett chose to ship on both platforms now):** iOS 1.0.2 (71) and Android
+> 2.0.4 (versionCode 8) carry the gated native prompt (on for both; Android not waiting for a
+> Wi-Fi-only setting) plus the About "Rate the App" row. Both submitted for review 2026-10-14.
+> Rules and code: CLAUDE.md "In-app review prompt" section. Next ratings-safety item: a Wi-Fi-only
+> download setting.
+
 - **(A) Recommended: build it.**
   - **Where:** iOS 1.0.3 at the earliest, never the crash-fix build. Android ships it after a
     Wi-Fi-only download setting, because new hours download on any network today.
