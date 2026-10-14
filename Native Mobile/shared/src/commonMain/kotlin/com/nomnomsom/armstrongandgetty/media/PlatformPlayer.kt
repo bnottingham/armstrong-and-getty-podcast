@@ -37,6 +37,17 @@ interface PlatformPlayer {
     val currentWindowIndex: Int
     val currentPositionInWindowMs: Long
     val isPlaying: Boolean
+
+    /**
+     * The listener's intent to play: true from a play command until a pause command (or
+     * stop), and it stays true while the system holds audio back (buffering, an audio-focus
+     * loss, a call or Siri). Media3 `playWhenReady`; iOS tracks it around play()/pause().
+     */
+    val playWhenReady: Boolean get() = isPlaying
+
+    /** The queue played through to its natural end (Media3 STATE_ENDED / last AVPlayerItem ended). */
+    val hasEnded: Boolean get() = false
+
     val speed: Float
     val isReadyOrBuffering: Boolean
 

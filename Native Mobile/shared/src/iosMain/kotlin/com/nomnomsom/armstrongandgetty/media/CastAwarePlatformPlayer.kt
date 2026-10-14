@@ -265,6 +265,13 @@ class CastAwarePlatformPlayer(
     override val isPlaying: Boolean
         get() = if (casting) remoteIsPlaying() else local.isPlaying
 
+    // The receiver reports no separate intent; while casting the review prompt is off anyway.
+    override val playWhenReady: Boolean
+        get() = if (casting) remoteIsPlaying() else local.playWhenReady
+
+    override val hasEnded: Boolean
+        get() = if (casting) false else local.hasEnded
+
     override val speed: Float
         get() = local.speed
 

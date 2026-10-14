@@ -22,8 +22,15 @@ data class PlaybackState(
     val playbackSpeed: Float = 1f,
     val currentDayDate: String? = null,
     val currentSegmentIndex: Int = 0,
-    val isReady: Boolean = false
-)
+    val isReady: Boolean = false,
+    /** See [PlatformPlayer.playWhenReady]: stays true while playback is merely held back. */
+    val playWhenReady: Boolean = false,
+    /** See [PlatformPlayer.hasEnded]. */
+    val hasEnded: Boolean = false
+) {
+    /** The listener still wants audio: asked to play and the queue hasn't run out. */
+    val intendsToPlay: Boolean get() = playWhenReady && !hasEnded
+}
 
 class PlaybackController(
     private val player: PlatformPlayer
@@ -246,7 +253,9 @@ class PlaybackController(
             playbackSpeed = player.speed,
             currentDayDate = currentDayDate,
             currentSegmentIndex = originalSegmentIndex,
-            isReady = player.isReadyOrBuffering
+            isReady = player.isReadyOrBuffering,
+            playWhenReady = player.playWhenReady,
+            hasEnded = player.hasEnded
         )
     }
 

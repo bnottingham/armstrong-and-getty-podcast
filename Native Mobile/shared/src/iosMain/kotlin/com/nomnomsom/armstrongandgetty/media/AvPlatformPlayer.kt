@@ -64,6 +64,16 @@ class AvPlatformPlayer : PlatformPlayer {
     private var endObserver: Any? = null
     private var connected = false
 
+    /**
+     * Listener intent, for [playWhenReady]: set by play commands, cleared by pause/stop and
+     * at the end of the playlist. Interruptions (calls, Siri, alarms) drop AVPlayer's rate
+     * without calling pause(), so they leave it set.
+     */
+    private var intendsToPlay = false
+
+    /** The last item of the playlist played to its end and playback parked there. */
+    private var ended = false
+
     override fun connect() {
         if (connected) return
         connected = true
@@ -151,6 +161,8 @@ class AvPlatformPlayer : PlatformPlayer {
         } else {
             // End of playlist — stay parked at the end, paused (Media3 behavior).
             player.pause()
+            intendsToPlay = false
+            ended = true
             updateNowPlaying()
         }
         onStateChanged?.invoke()
@@ -163,15 +175,20 @@ class AvPlatformPlayer : PlatformPlayer {
         autoPlay: Boolean
     ) {
         this.items = items
+        ended = false
         if (items.isEmpty()) {
             player.replaceCurrentItemWithPlayerItem(null)
             currentIndex = 0
+            intendsToPlay = false
             updateNowPlaying()
             return
         }
         switchToWindow(startWindow.coerceIn(0, items.size - 1), startPositionMs, resumePlaying = false)
         if (autoPlay) {
             play()
+        } else {
+            // A replaced item can keep the player's rate; report what actually happens.
+            intendsToPlay = isPlaying
         }
     }
 
@@ -185,15 +202,20 @@ class AvPlatformPlayer : PlatformPlayer {
         player.replaceCurrentItemWithPlayerItem(null)
         items = emptyList()
         currentIndex = 0
+        intendsToPlay = false
+        ended = false
         MPNowPlayingInfoCenter.defaultCenter().nowPlayingInfo = null
     }
 
     override fun play() {
+        intendsToPlay = true
+        ended = false
         player.rate = desiredRate
         updateNowPlaying()
     }
 
     override fun pause() {
+        intendsToPlay = false
         player.pause()
         updateNowPlaying()
     }
@@ -233,6 +255,12 @@ class AvPlatformPlayer : PlatformPlayer {
     override val isPlaying: Boolean
         get() = player.rate > 0f
 
+    override val playWhenReady: Boolean
+        get() = intendsToPlay
+
+    override val hasEnded: Boolean
+        get() = ended
+
     override val speed: Float
         get() = desiredRate
 
@@ -246,6 +274,7 @@ class AvPlatformPlayer : PlatformPlayer {
     private fun switchToWindow(windowIndex: Int, positionMs: Long, resumePlaying: Boolean) {
         val item = items.getOrNull(windowIndex) ?: return
         currentIndex = windowIndex
+        ended = false
 
         val url = NSURL.fileURLWithPath(item.filePath)
         val playerItem = AVPlayerItem(uRL = url)
@@ -254,12 +283,14 @@ class AvPlatformPlayer : PlatformPlayer {
             seekWithinWindow(positionMs)
         }
         if (resumePlaying) {
+            intendsToPlay = true
             player.rate = desiredRate
         }
         updateNowPlaying()
     }
 
     private fun seekWithinWindow(positionMs: Long) {
+        ended = false
         val clamped = positionMs.coerceAtLeast(0)
         player.seekToTime(
             time = CMTimeMakeWithSeconds(clamped / 1000.0, 1000),

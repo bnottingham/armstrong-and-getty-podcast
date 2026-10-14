@@ -109,6 +109,13 @@ class Media3PlatformPlayer(
     override val isPlaying: Boolean
         get() = controller?.isPlaying ?: false
 
+    // Stays true through audio-focus suppression and buffering, and at STATE_ENDED.
+    override val playWhenReady: Boolean
+        get() = controller?.playWhenReady ?: false
+
+    override val hasEnded: Boolean
+        get() = controller?.playbackState == Player.STATE_ENDED
+
     override val speed: Float
         get() = controller?.playbackParameters?.speed ?: 1f
 
@@ -124,6 +131,10 @@ class Media3PlatformPlayer(
     private fun setupPlayerListener() {
         controller?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onStateChanged?.invoke()
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 onStateChanged?.invoke()
             }
 
