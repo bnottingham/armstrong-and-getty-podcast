@@ -6,6 +6,7 @@ import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
+import com.nomnomsom.armstrongandgetty.download.DownloadPolicy
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.review.ReviewCoordinator
 import com.nomnomsom.armstrongandgetty.review.SessionHealth
@@ -21,7 +22,7 @@ import org.koin.dsl.module
 /**
  * Platform module supplies: RoomDatabase.Builder<PodcastDatabase>, the HttpClient
  * (with a platform engine), UserDeletionTracker, PlatformPlayer, AnalyticsTracker,
- * ReviewStateStore, and ReviewEnvironment.
+ * ReviewStateStore, ReviewEnvironment, DownloadSettings and NetworkStatus.
  */
 expect fun platformModule(): Module
 
@@ -54,6 +55,9 @@ val commonModule = module {
     }
 
     single { PlaybackController(get()) }
+
+    // "Download over Wi-Fi only" gate (setting default off). Lazy, side-effect-free.
+    single { DownloadPolicy(get(), get()) }
 
     // In-app rating prompt. Lazy singles, resolved only from App() composition (main thread).
     single { SessionHealth() }

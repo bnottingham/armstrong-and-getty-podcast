@@ -7,6 +7,9 @@ import com.nomnomsom.armstrongandgetty.analytics.AnalyticsBridgeHolder
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
+import com.nomnomsom.armstrongandgetty.download.DownloadSettings
+import com.nomnomsom.armstrongandgetty.download.IosNetworkStatus
+import com.nomnomsom.armstrongandgetty.download.NetworkStatus
 import com.nomnomsom.armstrongandgetty.media.AvPlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.CastAwarePlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.PlatformPlayer
@@ -50,4 +53,9 @@ actual fun platformModule(): Module = module {
     // In-app review state: new `in_app_review.`-prefixed keys in standard NSUserDefaults.
     single { ReviewStateStore(NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)) }
     single<ReviewEnvironment> { IosReviewEnvironment() }
+
+    // "Download over Wi-Fi only" (default off): new `download_settings.`-prefixed key in
+    // standard NSUserDefaults. The path monitor starts on its first query, not here.
+    single { DownloadSettings(NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)) }
+    single<NetworkStatus> { IosNetworkStatus() }
 }

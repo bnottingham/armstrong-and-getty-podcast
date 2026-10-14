@@ -9,11 +9,15 @@ import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
 import com.nomnomsom.armstrongandgetty.data.remote.FeedSource
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentStore
+import com.nomnomsom.armstrongandgetty.download.NetworkKind
+import com.nomnomsom.armstrongandgetty.download.NetworkStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import okio.IOException
 
 const val FAKE_SEGMENT_DURATION_MS = 3_600_000L
@@ -166,4 +170,43 @@ class FakeDeletionMarks : DeletionMarks {
     override fun isDeleted(date: String): Boolean = date in deleted
     override fun markDeleted(date: String) { deleted += date }
     override fun unmarkDeleted(date: String) { deleted -= date }
+}
+
+/**
+ * Scriptable [NetworkStatus]. Set [kind] to change the reading; [changes] follows it live.
+ * Counts every query so tests can prove the default (setting off) path never touches it.
+ */
+class FakeNetworkStatus(initial: NetworkKind = NetworkKind.UNMETERED) : NetworkStatus {
+    val state = MutableStateFlow(initial)
+
+    var kind: NetworkKind
+        get() = state.value
+        set(value) {
+            state.value = value
+        }
+
+    var currentCalls = 0
+        private set
+    var awaitKnownCalls = 0
+        private set
+    var changesCalls = 0
+        private set
+
+    val totalCalls: Int get() = currentCalls + awaitKnownCalls + changesCalls
+
+    override fun current(): NetworkKind {
+        currentCalls++
+        return state.value
+    }
+
+    override suspend fun awaitKnown(timeoutMs: Long): NetworkKind {
+        awaitKnownCalls++
+        return withTimeoutOrNull(timeoutMs) { state.first { it != NetworkKind.UNKNOWN } }
+            ?: NetworkKind.UNKNOWN
+    }
+
+    override fun changes(): Flow<NetworkKind> {
+        changesCalls++
+        return state
+    }
 }

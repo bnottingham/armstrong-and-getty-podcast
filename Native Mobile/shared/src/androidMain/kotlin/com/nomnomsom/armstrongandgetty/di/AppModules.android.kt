@@ -7,6 +7,10 @@ import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.analytics.FirebaseAnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
+import com.nomnomsom.armstrongandgetty.download.AndroidNetworkStatus
+import com.nomnomsom.armstrongandgetty.download.DownloadSettings
+import com.nomnomsom.armstrongandgetty.download.DownloadSettingsKeys
+import com.nomnomsom.armstrongandgetty.download.NetworkStatus
 import com.nomnomsom.armstrongandgetty.media.Media3PlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.PlatformPlayer
 import com.nomnomsom.armstrongandgetty.review.AndroidReviewEnvironment
@@ -47,4 +51,15 @@ actual fun platformModule(): Module = module {
         )
     }
     single<ReviewEnvironment> { AndroidReviewEnvironment(androidContext()) }
+
+    // "Download over Wi-Fi only" (default off) — its OWN prefs file, never "user_deletions"
+    // or "in_app_review". Lazy: nothing reads the network until the setting is on.
+    single {
+        DownloadSettings(
+            SharedPreferencesSettings(
+                androidContext().getSharedPreferences(DownloadSettingsKeys.ANDROID_PREFS_FILE, Context.MODE_PRIVATE)
+            )
+        )
+    }
+    single<NetworkStatus> { AndroidNetworkStatus(androidContext()) }
 }
