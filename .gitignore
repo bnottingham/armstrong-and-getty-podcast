@@ -127,7 +127,8 @@ Packages/
 # Google Cast iOS SDK — 71MB vendored binary, auto-downloaded by the Xcode
 # "Compile Kotlin Framework" build phase (see iOS project) or
 # "Native Mobile/scripts/fetch_cast_sdk.sh"
-Native Mobile/iOS/Frameworks/GoogleCast.xcframework/
+# No trailing slash: also ignores a symlink to a shared copy (e.g. in a git worktree).
+Native Mobile/iOS/Frameworks/GoogleCast.xcframework
 
 # Node (promo screenshot tooling)
 node_modules/
