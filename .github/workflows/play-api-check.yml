@@ -1,0 +1,80 @@
+name: Play API check
+
+# Read-only check that the Google Play service account still works: mints an
+# OAuth token from GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64, opens a Play edit,
+# prints each track's releases, then deletes the edit (nothing is changed or
+# sent for review). Run it after rotating the key or changing Play permissions.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Google Play Developer API
+        env:
+          PLAY_JSON_B64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PLAY_JSON_B64" | base64 -d > "$RUNNER_TEMP/sa.json"
+          python3 - <<'PY'
+          import base64, json, os, subprocess, time, urllib.parse, urllib.request
+
+          tmp = os.environ["RUNNER_TEMP"]
+          sa = json.load(open(f"{tmp}/sa.json"))
+
+          def b64(raw):
+              return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+          now = int(time.time())
+          header = b64(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
+          claims = b64(json.dumps({
+              "iss": sa["client_email"],
+              "scope": "https://www.googleapis.com/auth/androidpublisher",
+              "aud": "https://oauth2.googleapis.com/token",
+              "iat": now, "exp": now + 600,
+          }).encode())
+          pem = f"{tmp}/sa.pem"
+          with open(pem, "w") as f:
+              f.write(sa["private_key"])
+          try:
+              sig = subprocess.run(["openssl", "dgst", "-sha256", "-sign", pem],
+                                   input=header + b"." + claims, capture_output=True, check=True).stdout
+          finally:
+              os.remove(pem)
+          assertion = (header + b"." + claims + b"." + b64(sig)).decode()
+          token = json.load(urllib.request.urlopen(urllib.request.Request(
+              "https://oauth2.googleapis.com/token",
+              data=urllib.parse.urlencode({
+                  "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                  "assertion": assertion,
+              }).encode())))["access_token"]
+
+          pkg = "com.nomnomsom.armstrongandgetty"
+          base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{pkg}/edits"
+
+          def call(method, url):
+              req = urllib.request.Request(url, method=method, headers={"Authorization": f"Bearer {token}"},
+                                           data=b"{}" if method == "POST" else None)
+              if method == "POST":
+                  req.add_header("Content-Type", "application/json")
+              with urllib.request.urlopen(req) as resp:
+                  body = resp.read()
+                  return json.loads(body) if body else {}
+
+          edit = call("POST", base)["id"]
+          try:
+              for track in call("GET", f"{base}/{edit}/tracks").get("tracks", []):
+                  releases = [(r.get("name"), r.get("status"), r.get("versionCodes")) for r in track.get("releases", [])]
+                  print(f"{track['track']}: {releases}")
+          finally:
+              call("DELETE", f"{base}/{edit}")
+          print(f"Play API OK as {sa['client_email']}")
+          PY
+      - name: Shred credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json" "$RUNNER_TEMP/sa.pem"

@@ -163,9 +163,10 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
   `playStatus`: draft/completed; default production + **draft**, so a person still sends it
   for review in Play Console → Publishing overview) with the R8 mapping file and release
   notes from `Native Mobile/Android/whatsnew/whatsnew-en-US` (≤500 chars — update it every
-  release). Needs the `PLAY_SERVICE_ACCOUNT_JSON` secret (service account in GCP project
-  `armstrong-and-getty-app-d67a4`, invited in Play Console → Users and permissions); without
-  it the step logs a warning and skips. Bump the versionCode default in
+  release). Uses the `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64` secret (service account
+  `ag-podcast-play-ci@armstrong-and-getty-app-d67a4.iam.gserviceaccount.com`, set up Jul 2026, with
+  release + store-presence permissions on this app in Play Console); without it the step logs a
+  warning and skips. `play-api-check.yml` verifies the credential without uploading. Bump the versionCode default in
   `Android/build.gradle.kts` for each release (Play rejects a reused code).
 - `.github/workflows/ios-release.yml` is a dispatch-only scaffold that fails fast
   until the Apple signing secrets listed in its header are configured.
