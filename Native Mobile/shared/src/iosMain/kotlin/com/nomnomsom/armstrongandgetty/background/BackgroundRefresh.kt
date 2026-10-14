@@ -1,5 +1,6 @@
 package com.nomnomsom.armstrongandgetty.background
 
+import com.nomnomsom.armstrongandgetty.analytics.AnalyticsBridgeHolder
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.model.DownloadState
@@ -68,10 +69,19 @@ private fun scheduleNextRefresh() {
 private fun handleRefresh(task: BGAppRefreshTask) {
     scheduleNextRefresh()
 
-    // A background launch never builds the UI, so Koin may not be up yet.
-    ensureKoinStarted()
-    val repository = KoinPlatform.getKoin().get<PodcastRepository>()
-    val analytics = KoinPlatform.getKoin().get<AnalyticsTracker>()
+    // Koin may not be up yet, and the UI may be starting it on the main thread at this same
+    // moment (ensureKoinStarted() serializes the two). This runs inside BGTaskScheduler's
+    // callback, where an uncaught Kotlin exception aborts the app — fail the task instead.
+    val (repository, analytics) = try {
+        ensureKoinStarted()
+        val koin = KoinPlatform.getKoin()
+        koin.get<PodcastRepository>() to koin.get<AnalyticsTracker>()
+    } catch (e: Exception) {
+        AppLog.e(TAG, "Background refresh could not start", e)
+        AnalyticsBridgeHolder.tracker.recordError("Background refresh could not start", e)
+        task.setTaskCompletedWithSuccess(false)
+        return
+    }
 
     val job = scope.launch {
         try {
