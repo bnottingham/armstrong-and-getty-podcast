@@ -91,6 +91,44 @@ Media button preferences use Media3's **built-in icons**
 (theme-attr tints render malformed in notification shells). ±30s sits in the primary
 back/forward slots, ±10s in the secondary slots (surfaces on Auto/Wear).
 
+## In-app review (rating prompt)
+
+Code: `shared/.../review/` (commonMain policy + coordinator, platform launchers), the
+Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest/.../review/`.
+
+- **Store policy (Apple + Google):** system sheet only (`AppStore.requestReview(in:)`,
+  Play In-App Review). No "Enjoying the app?" pre-question, no sentiment gating, no
+  incentives, nothing gated behind a rating. **No button may call the review API** — the
+  About "Rate the App" row only deep-links to the store (`StoreLinks`). Analytics say
+  `in_app_review_requested`, never "shown"/"rated": neither store reports either.
+- **Only `ReviewCoordinator` asks**, only from `App()` composition (via `ReviewPromptHost`),
+  only at a natural pause on the Episodes list (`LEFT_PLAYER`, `PAUSED_ON_LIST`), after a
+  2 s settle that re-checks every gate live. Never call it from `PlaybackService`, Android
+  Auto, `NewEpisodeCheckWorker`, the iOS BG task, or at launch/resume. Its Koin
+  definitions stay lazy `single`s (no `createdAtStart`) — see the iOS Koin startup race
+  (`EnsureKoin.kt`).
+- **Gates** live in `ReviewPolicy` (pure, exhaustively tested): ≥3 distinct device-local
+  days with ≥10 min credited listening, ≥5 days since first seen, 120-day cooldown, one
+  per app version, lifetime cap 3, 7 days quiet after a crash, never while playing,
+  casting, or after a visible failure this process. Its day key is **device-local**, not
+  the engine's UTC key — don't unify them.
+- **Storage is new-keys-only:** Android prefs file `in_app_review`, iOS NSUserDefaults keys
+  prefixed `in_app_review.`. Never reuse `user_deletions` / Room / `podcasts/`
+  (`ReviewStateStoreTest` enforces it).
+- **Android auto-prompt is OFF** (`ANDROID_AUTO_PROMPT_ENABLED` in
+  `androidMain/.../review/AndroidReviewEnvironment.kt`) until a Wi-Fi-only download
+  setting ships (`seo/strategy.md` §4.4). Listening days still accumulate meanwhile.
+- **Verify:** `./gradlew :shared:iosSimulatorArm64Test`; logcat / Xcode console tag
+  `InAppReview` prints `skip <moment>: <reason>` or `requested …`. The iOS sheet never
+  appears in TestFlight (development builds only); the Play card only on a Play-installed
+  build (internal test track). Seed state rather than lowering thresholds. iOS simulator:
+  with the app terminated, `defaults write` the **container** plist (a plain bundle-id
+  domain does not reach the app): `P="$(xcrun simctl get_app_container <udid>
+  nomnomsom.armstrongandgetty data)/Library/Preferences/nomnomsom.armstrongandgetty"`,
+  then `xcrun simctl spawn <udid> defaults write "$P" in_app_review.first_seen_ms -int <ms>`.
+  Android: `adb shell run-as com.nomnomsom.armstrongandgetty cat shared_prefs/in_app_review.xml`.
+  A generic-simulator `xcodebuild` needs `ARCHS=arm64` (there is no iosX64 target).
+
 ## Release CI & signing
 
 - Website: `docs/` → Firebase Hosting (`firebase deploy --only hosting`), live at
