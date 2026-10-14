@@ -1,5 +1,7 @@
 /* Armstrong & Getty Podcast App — site styles.
-   Palette mirrors the app theme (shared/ui/theme/Theme.kt). */
+   Palette mirrors the app theme (shared/ui/theme/Theme.kt).
+   Firebase caches /assets/** for 7 days: when this file changes, bump the
+   ?v= query on the stylesheet link in every docs/*.html page. */
 
 :root {
   --bg: #0e0f13;
@@ -98,7 +100,8 @@ img { max-width: 100%; height: auto; }
 }
 @media (max-width: 860px) {
   .hero .wrap { grid-template-columns: 1fr; }
-  .hero-art { order: -1; }
+  /* Headline, lede and store badges come first on phones; the mockup follows. */
+  .hero-art .phone { max-width: 260px; }
 }
 .kicker {
   color: var(--gold); font-weight: 800;
@@ -180,8 +183,8 @@ section h2 {
 
 /* Screenshots */
 .shots {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 28px; justify-items: center;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 300px));
+  justify-content: center; gap: 28px 56px; justify-items: center;
 }
 @media (max-width: 720px) { .shots { grid-template-columns: 1fr; } }
 .shot { text-align: center; }
@@ -224,7 +227,7 @@ section h2 {
 
 .prose { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
 .prose h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); letter-spacing: -0.01em; margin: 0 0 6px; }
-.prose .updated { color: var(--muted); font-size: 0.88rem; margin: 0 0 36px; }
+.prose .updated { color: var(--text-2); font-size: 0.88rem; margin: 0 0 36px; }
 .prose h2 { font-size: 1.25rem; margin: 40px 0 12px; }
 .prose h3 { font-size: 1.05rem; margin: 28px 0 8px; }
 .prose p, .prose li { color: var(--text-2); font-size: 0.97rem; }
@@ -261,4 +264,76 @@ section h2 {
 }
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
 .site-footer a { color: var(--text-2); }
-.site-footer .disclaimer { max-width: 56em; margin-top: 18px; }
+.site-footer .disclaimer { max-width: 56em; margin-top: 18px; color: var(--text-2); }
+
+/* ---------- Added 2026-10-13: guides, how-it-works, Q&A ---------- */
+
+/* Small note under the hero badges */
+.hero-note { color: var(--text-2); font-size: 0.9rem; margin: 18px 0 0; max-width: 34em; }
+
+/* Internal (same-site) entries in the link list point right, not out */
+.link-list a.internal::after { content: "→"; }
+
+/* How it works */
+.steps {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+  counter-reset: step;
+}
+@media (max-width: 860px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+.steps li {
+  background: var(--card); border: 1px solid var(--outline);
+  border-radius: var(--radius); padding: 22px 22px 20px;
+  counter-increment: step;
+}
+.steps li::before {
+  content: counter(step);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(232, 179, 75, 0.14); color: var(--gold);
+  font-weight: 800; font-size: 0.9rem; margin-bottom: 12px;
+}
+.steps h3 { margin: 0 0 6px; font-size: 1rem; }
+.steps p { margin: 0; color: var(--text-2); font-size: 0.92rem; }
+.section-more { margin: 22px 0 0; }
+
+/* Visible questions and answers */
+.qa { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+@media (max-width: 760px) { .qa { grid-template-columns: 1fr; } }
+.qa article {
+  background: var(--card); border: 1px solid var(--outline);
+  border-radius: var(--radius); padding: 22px 24px;
+}
+.qa h3 { margin: 0 0 8px; font-size: 1.02rem; }
+.qa p { margin: 0; color: var(--text-2); font-size: 0.94rem; }
+
+/* Guide pages */
+.breadcrumb { font-size: 0.85rem; color: var(--text-2); margin: 0 0 18px; }
+.breadcrumb a { color: var(--text-2); }
+.prose .source { color: var(--text-2); font-size: 0.85rem; margin-top: -4px; }
+.prose .source a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
+.prose .tz-local {
+  color: var(--text); background: var(--card); border: 1px solid var(--outline);
+  border-radius: 12px; padding: 12px 16px; margin: 16px 0;
+}
+.prose .badges { margin: 20px 0 8px; }
+/* Full-width CTAs inside prose must wrap on narrow phones (no sideways scroll at 320px). */
+.prose .btn-gold { margin: 6px 0 4px; white-space: normal; max-width: 100%; text-align: center; }
+.table-scroll { overflow-x: auto; margin: 18px 0 20px; -webkit-overflow-scrolling: touch; }
+.prose table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.prose th, .prose td {
+  text-align: left; vertical-align: top;
+  padding: 10px 12px; border-bottom: 1px solid var(--outline);
+  color: var(--text-2);
+}
+.prose th { color: var(--text); font-weight: 700; background: var(--surface); }
+.prose td:first-child { color: var(--text); }
+.table-wide table { min-width: 560px; }
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.prose code { overflow-wrap: anywhere; }
+.prose h1 { line-height: 1.22; }
+.prose table.times td + td { white-space: nowrap; }

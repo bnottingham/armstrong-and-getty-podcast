@@ -3,20 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Armstrong &amp; Getty Podcast App — The A&amp;G Show, On Demand</title>
-  <meta name="description" content="An unofficial companion app for The Armstrong &amp; Getty Show. Every hour of every show day, assembled into one daily episode — download it, cast it, and listen on iPhone or Android.">
+  <title>Armstrong &amp; Getty Podcast App (Unofficial): Full Show Daily</title>
+  <meta name="description" content="Free, unofficial app for the Armstrong and Getty Show podcast: every hour of each show day in one episode. Download it, Chromecast it or AirPlay it.">
   <link rel="canonical" href="https://armstrong-and-getty-podcast.web.app/">
   <meta name="google-site-verification" content="OolZqqorK-AC0N4O4OnM6kTjDwN1h-6L8TzIc2NcEBw">
+  <meta name="apple-itunes-app" content="app-id=6796129205">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/img/icon-48.png">
   <link rel="icon" type="image/svg+xml" href="assets/img/icon.svg">
   <link rel="apple-touch-icon" href="assets/img/icon-180.png">
-  <link rel="stylesheet" href="assets/css/site.css">
+  <link rel="stylesheet" href="assets/css/site.css?v=20261013">
   <meta name="theme-color" content="#0e0f13">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Armstrong &amp; Getty Podcast App">
-  <meta property="og:title" content="Armstrong &amp; Getty Podcast App — The A&amp;G Show, On Demand">
-  <meta property="og:description" content="Every hour of The Armstrong &amp; Getty Show, assembled into one daily episode. Download, cast, and listen on iPhone or Android.">
+  <meta property="og:title" content="Armstrong &amp; Getty Podcast App (Unofficial)">
+  <meta property="og:description" content="Unofficial app: every hour of the Armstrong &amp; Getty Show podcast in one daily episode. Download, cast, and listen on iPhone or Android.">
   <meta property="og:url" content="https://armstrong-and-getty-podcast.web.app/">
   <meta property="og:image" content="https://armstrong-and-getty-podcast.web.app/assets/img/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -24,22 +27,54 @@
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Armstrong &amp; Getty Podcast App — The A&amp;G Show, On Demand">
-  <meta name="twitter:description" content="Every hour of The Armstrong &amp; Getty Show, assembled into one daily episode. Download, cast, and listen on iPhone or Android.">
+  <meta name="twitter:title" content="Armstrong &amp; Getty Podcast App (Unofficial)">
+  <meta name="twitter:description" content="Unofficial app: every hour of the Armstrong &amp; Getty Show podcast in one daily episode. Download, cast, and listen on iPhone or Android.">
   <meta name="twitter:image" content="https://armstrong-and-getty-podcast.web.app/assets/img/og-image.png">
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "MobileApplication",
-    "name": "Armstrong & Getty Podcast App",
-    "description": "An unofficial companion app for The Armstrong & Getty Show. Every hour of every show day, assembled into one daily episode — download it, cast it, and listen on iPhone or Android.",
-    "operatingSystem": "iOS, Android",
-    "applicationCategory": "EntertainmentApplication",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "url": "https://armstrong-and-getty-podcast.web.app/",
-    "image": "https://armstrong-and-getty-podcast.web.app/assets/img/og-image.png",
-    "author": { "@type": "Person", "name": "Brett", "email": "brett@nomnomsom.com" }
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://armstrong-and-getty-podcast.web.app/#website",
+        "name": "Armstrong & Getty Podcast App",
+        "url": "https://armstrong-and-getty-podcast.web.app/",
+        "inLanguage": "en-US",
+        "publisher": { "@id": "https://armstrong-and-getty-podcast.web.app/#publisher" }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://armstrong-and-getty-podcast.web.app/#publisher",
+        "name": "Renew Studios"
+      },
+      {
+        "@type": "MobileApplication",
+        "@id": "https://armstrong-and-getty-podcast.web.app/#app",
+        "name": "Armstrong & Getty Podcast App",
+        "description": "Unofficial, fan-built companion app that plays the official Armstrong & Getty On Demand podcast as one episode per show day. Not affiliated with Armstrong & Getty or iHeartMedia.",
+        "url": "https://armstrong-and-getty-podcast.web.app/",
+        "image": "https://armstrong-and-getty-podcast.web.app/assets/img/og-image.png",
+        "operatingSystem": "iOS, Android",
+        "applicationCategory": "EntertainmentApplication",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "sameAs": [
+          "https://apps.apple.com/us/app/armstrong-getty-podcast-app/id6796129205",
+          "https://play.google.com/store/apps/details?id=com.nomnomsom.armstrongandgetty"
+        ],
+        "screenshot": [
+          "https://armstrong-and-getty-podcast.web.app/assets/img/screens/player.png",
+          "https://armstrong-and-getty-podcast.web.app/assets/img/screens/library.png"
+        ],
+        "publisher": { "@id": "https://armstrong-and-getty-podcast.web.app/#publisher" },
+        "about": {
+          "@type": "RadioSeries",
+          "name": "The Armstrong & Getty Show",
+          "sameAs": "https://en.wikipedia.org/wiki/Armstrong_%26_Getty"
+        }
+      }
+    ]
   }
   </script>
 </head>
@@ -53,11 +88,10 @@
         <span class="brand-name">Armstrong &amp; Getty <span class="brand-suffix">Podcast App</span></span>
       </a>
       <nav class="site-nav" aria-label="Site">
-        <a href="#features">Features</a>
-        <a href="#screenshots" class="hide-sm">Screenshots</a>
-        <a href="#show" class="hide-sm">The Show</a>
+        <a href="#features" class="hide-sm">Features</a>
+        <a href="how-to-listen">How to listen</a>
+        <a href="podcast-feeds">Podcasts</a>
         <a href="support">Support</a>
-        <a href="privacy">Privacy</a>
       </nav>
     </div>
   </header>
@@ -66,13 +100,13 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="wrap">
         <div>
-          <p class="kicker">Unofficial companion app · iPhone &amp; Android</p>
-          <h1 id="hero-title">The Armstrong &amp; Getty Show.<br>Every hour. <em>On demand.</em></h1>
+          <p class="kicker">Unofficial, free companion app · iPhone &amp; Android</p>
+          <h1 id="hero-title">Every hour of the Armstrong &amp; Getty podcast, in one daily episode</h1>
           <p class="lede">
-            Missed the show this morning? The app assembles every hour of every
-            Armstrong&nbsp;&amp;&nbsp;Getty show day into one clean daily episode.
-            Download it for the commute, cast it to the kitchen speaker, and pick up
-            right where you left off.
+            Missed the show this morning? This app takes every hour of The
+            Armstrong&nbsp;&amp;&nbsp;Getty Show podcast and puts each show day in order as
+            one episode. Download it for the commute, cast it to the kitchen speaker, and
+            pick up where you left off.
           </p>
           <div class="badges">
             <a class="badge" href="https://apps.apple.com/us/app/armstrong-getty-podcast-app/id6796129205" aria-label="Download Armstrong &amp; Getty Podcast App on the App Store">
@@ -95,6 +129,11 @@
               </span>
             </a>
           </div>
+          <p class="hero-note">
+            Looking for the show's official site? Go to
+            <a href="https://www.armstrongandgetty.com/" rel="noopener">armstrongandgetty.com</a>.
+            Want to hear it live? See <a href="how-to-listen">how to listen live</a>.
+          </p>
         </div>
         <div class="hero-art">
           <div class="phone">
@@ -107,16 +146,17 @@
     <section id="features" aria-labelledby="features-title">
       <div class="wrap">
         <p class="section-kicker">Why you'll like it</p>
-        <h2 id="features-title">Built for one thing: never missing the show</h2>
+        <h2 id="features-title">Missed this morning's show? Hear every hour, in order</h2>
         <p class="section-lede">
-          No accounts, no ads in the app, no clutter — just The Armstrong &amp; Getty
-          Show, organized the way you actually listen to it.
+          No account, no clutter, and the app adds no ads of its own (the show's own
+          sponsor breaks play as published). Just the show's official podcast, arranged one
+          show day per episode.
         </p>
         <div class="features">
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
             <h3>One episode per show day</h3>
-            <p>Every hour of the day's broadcast is stitched into a single daily episode, in order, with each segment a tap away.</p>
+            <p>Every hour the podcast posts for a show day is stitched into a single episode, in order, with each segment a tap away.</p>
           </article>
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg></div>
@@ -125,8 +165,8 @@
           </article>
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="13" rx="2"/><path d="M2 15c3.5 0 6.5 3 7 6M2 11c5.5 0 10 4.5 10.5 10"/></svg></div>
-            <h3>Chromecast built in</h3>
-            <p>Send the show to any Chromecast speaker or TV, from iPhone or Android, and keep control from your pocket.</p>
+            <h3>Google Cast and AirPlay</h3>
+            <p>Send the show to Chromecast speakers and TVs from iPhone or Android, or use AirPlay on iPhone, and keep control from your phone.</p>
           </article>
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
@@ -136,14 +176,44 @@
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5zM16 9a4.5 4.5 0 0 1 0 6M19 6.5a8.5 8.5 0 0 1 0 11"/></svg></div>
             <h3>Real playback controls</h3>
-            <p>Jump 10 or 30 seconds either way, change playback speed, or hop straight to the next segment of the show.</p>
+            <p>Jump back or ahead 10 or 30 seconds, play at 1×, 1.25×, 1.5× or 2×, or tap any segment in the day's list to jump straight to it.</p>
           </article>
           <article class="feature">
             <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg></div>
-            <h3>Fresh every morning</h3>
-            <p>The app refreshes in the background so today's show is waiting for you — with lock-screen controls wherever you play it.</p>
+            <h3>New hours, added automatically</h3>
+            <p>The app checks the feed for new hours in the background (on iPhone, when iOS allows it) and adds them to that day's episode, with lock-screen controls wherever you play it.</p>
           </article>
         </div>
+      </div>
+    </section>
+
+    <section id="how-it-works" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="section-kicker">How it works</p>
+        <h2 id="how-title">From the morning broadcast to one episode</h2>
+        <p class="section-lede">
+          The official podcast posts the show an hour at a time, mixed in with extras. The
+          app puts each show day back together for you.
+        </p>
+        <ol class="steps">
+          <li>
+            <h3>The show airs live</h3>
+            <p>Weekdays, 6–10 a.m. Pacific, on Talk 650 KSTE and stations around the country.</p>
+          </li>
+          <li>
+            <h3>Each hour is posted</h3>
+            <p>Hours land in the official Armstrong &amp; Getty On Demand podcast, usually within about half an hour of airing.</p>
+          </li>
+          <li>
+            <h3>The app adds it to the day</h3>
+            <p>Every item posted for that show day joins one episode, in the order it was posted.</p>
+          </li>
+          <li>
+            <h3>You listen your way</h3>
+            <p>Stream it, download it for the drive, or cast it to a speaker, and pick up where you left off.</p>
+          </li>
+        </ol>
+        <p class="section-more"><a href="podcast-feeds">Why the podcast feed can look scrambled →</a></p>
       </div>
     </section>
 
@@ -161,10 +231,6 @@
             <div class="phone"><img src="assets/img/screens/library.png" alt="Episode library listing one Armstrong &amp; Getty episode per show day with download buttons" width="900" height="1955" loading="lazy"></div>
             <figcaption>A clean library — one episode per show day</figcaption>
           </figure>
-          <figure class="shot">
-            <div class="phone"><img src="assets/img/screens/about.png" alt="About screen with links to the official Armstrong &amp; Getty website, streams, and store" width="900" height="1955" loading="lazy"></div>
-            <figcaption>Everything A&amp;G, one tap away</figcaption>
-          </figure>
         </div>
       </div>
     </section>
@@ -174,26 +240,83 @@
         <div class="about-grid">
           <div>
             <p class="section-kicker">The show</p>
-            <h2 id="show-title">Smart. Funny. Independent perspective.</h2>
+            <h2 id="show-title">About The Armstrong &amp; Getty Show</h2>
             <p class="section-lede">
-              Jack Armstrong and Joe Getty take an independent, contrarian look at news,
-              politics, and modern life — merciless critics of mainstream media, on the
-              air across the country every weekday morning. This app is a fan-built
-              companion for listening to the show on your schedule; the show itself, its
-              name, and all audio belong to Armstrong&nbsp;&amp;&nbsp;Getty and iHeartMedia.
+              Jack Armstrong and Joe Getty have hosted their weekday morning talk show for
+              more than 25 years, covering news, politics and everyday life with plenty of laughs. It airs
+              live 6–10 a.m. Pacific on Talk 650 KSTE in Sacramento and on stations around the
+              country. This app is an independent, fan-built way to hear the show's official
+              podcast on your schedule. The show, its name and all audio belong to
+              Armstrong&nbsp;&amp;&nbsp;Getty and iHeartMedia.
             </p>
             <p class="section-lede">
-              New to A&amp;G? Start at the official site — find a station, the live
-              stream, and everything else the guys are up to.
+              New to A&amp;G? Our guides cover when and where to listen live and how the
+              show's podcasts fit together. The official site has the show's news, Hot Links
+              and contact details.
             </p>
           </div>
           <ul class="link-list">
+            <li><a class="internal" href="how-to-listen">How to listen live <span>Times and stations</span></a></li>
+            <li><a class="internal" href="podcast-feeds">The A&amp;G podcasts, explained <span>On Demand, One More Thing &amp; more</span></a></li>
             <li><a href="https://www.armstrongandgetty.com/" rel="noopener">armstrongandgetty.com <span>Official website</span></a></li>
-            <li><a href="https://www.armstrongandgetty.com/howtolisten/" rel="noopener">How to listen <span>Stations, streams &amp; apps</span></a></li>
+            <li><a href="https://www.armstrongandgetty.com/howtolisten/" rel="noopener">Station finder <span>The show's official map</span></a></li>
             <li><a href="https://www.armstrongandgetty.com/featured/armstrong-gettys-hot-links/" rel="noopener">Hot Links <span>Stories from today's show</span></a></li>
             <li><a href="https://armstrongandgetty.store/" rel="noopener">A&amp;G Store <span>Official merch</span></a></li>
             <li><a href="https://www.iheart.com/podcast/64-armstrong-getty-one-more-th-30416018/" rel="noopener">One More Thing <span>A little more A&amp;G after the show</span></a></li>
           </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="questions" aria-labelledby="questions-title">
+      <div class="wrap">
+        <p class="section-kicker">Good to know</p>
+        <h2 id="questions-title">Questions before you download</h2>
+        <div class="qa">
+          <article>
+            <h3>Is this the official Armstrong &amp; Getty app?</h3>
+            <p>No. It's an unofficial, fan-built companion app. It plays the show's official
+            Armstrong &amp; Getty On Demand podcast and arranges each show day into one
+            episode, but it isn't affiliated with, endorsed by, or sponsored by
+            Armstrong&nbsp;&amp;&nbsp;Getty or iHeartMedia.</p>
+          </article>
+          <article>
+            <h3>Is there an official Armstrong &amp; Getty app?</h3>
+            <p>We couldn't find one (checked October&nbsp;13, 2026). The flagship station's
+            live stream and the show's podcasts are on
+            <a href="https://www.iheart.com/live/talk-650-kste-229/" rel="noopener">iHeartRadio</a>.</p>
+          </article>
+          <article>
+            <h3>Can I listen live in this app?</h3>
+            <p>No. The app plays each hour after it's posted to the official podcast, usually
+            the same morning. To listen live, see
+            <a href="how-to-listen">how to listen to Armstrong &amp; Getty</a>.</p>
+          </article>
+          <article>
+            <h3>Does it include One More Thing?</h3>
+            <p>When it's in the main feed, yes. One More Thing has its own podcast, and it's
+            often posted to the On Demand feed too; when it is, the app adds it to that
+            day's episode.</p>
+          </article>
+          <article>
+            <h3>Are there ads?</h3>
+            <p>The app adds no ads of its own and has no in-app purchases. The show's own
+            sponsor breaks are part of the official episodes and play as published.</p>
+          </article>
+          <article>
+            <h3>Is it free? Do I need an account?</h3>
+            <p>It's free on iPhone and Android, with no account or sign-up.</p>
+          </article>
+          <article>
+            <h3>Does it work with Chromecast and AirPlay?</h3>
+            <p>Yes. Cast to Chromecast and Google Cast speakers and TVs from iPhone or Android,
+            or use AirPlay on iPhone. CarPlay isn't supported.</p>
+          </article>
+          <article>
+            <h3>Where can I get help?</h3>
+            <p>The <a href="support">support page</a> covers downloads, casting and playback,
+            and how to reach the developer.</p>
+          </article>
         </div>
       </div>
     </section>
@@ -222,6 +345,8 @@
       <div class="cols">
         <nav aria-label="Footer">
           <a href="./">Home</a>
+          <a href="how-to-listen">How to listen</a>
+          <a href="podcast-feeds">Podcasts</a>
           <a href="support">Support</a>
           <a href="privacy">Privacy Policy</a>
           <a href="terms">Terms of Use</a>
@@ -232,8 +357,9 @@
         This is an unofficial companion app and website, not affiliated with, endorsed by,
         or sponsored by Armstrong&nbsp;&amp;&nbsp;Getty, iHeartMedia, or their affiliates.
         "Armstrong&nbsp;&amp;&nbsp;Getty" and all show content, names, and audio are the
-        property of their respective owners. Apple and the App&nbsp;Store are trademarks of
-        Apple&nbsp;Inc. Google&nbsp;Play is a trademark of Google&nbsp;LLC.
+        property of their respective owners. Apple, the App&nbsp;Store, AirPlay and CarPlay are
+        trademarks of Apple&nbsp;Inc. Google&nbsp;Play, Google&nbsp;Cast and Chromecast are
+        trademarks of Google&nbsp;LLC.
       </p>
     </div>
   </footer>

@@ -1,0 +1,9 @@
+{
+  "name": "ag-podcast-seo-tools",
+  "private": true,
+  "description": "SEO tooling for the website in docs/. Canonical test command (repo root): node --test 'tools/seo/*.test.mjs'. `node --test tools/seo/` also works but runs only `main` (site.test.mjs).",
+  "main": "site.test.mjs",
+  "scripts": {
+    "test": "node --test *.test.mjs"
+  }
+}

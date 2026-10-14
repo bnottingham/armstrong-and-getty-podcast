@@ -2,20 +2,22 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://armstrong-and-getty-podcast.web.app/</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-10-13</lastmod>
+  </url>
+  <url>
+    <loc>https://armstrong-and-getty-podcast.web.app/how-to-listen</loc>
+    <lastmod>2026-10-13</lastmod>
+  </url>
+  <url>
+    <loc>https://armstrong-and-getty-podcast.web.app/podcast-feeds</loc>
+    <lastmod>2026-10-13</lastmod>
   </url>
   <url>
     <loc>https://armstrong-and-getty-podcast.web.app/support</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <lastmod>2026-10-13</lastmod>
   </url>
   <url>
     <loc>https://armstrong-and-getty-podcast.web.app/privacy</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.4</priority>
+    <lastmod>2026-10-13</lastmod>
   </url>
 </urlset>

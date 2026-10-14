@@ -6,13 +6,22 @@
   <title>Support &amp; FAQ — Armstrong &amp; Getty Podcast App</title>
   <meta name="description" content="Get help with the unofficial Armstrong &amp; Getty Podcast App: downloads, Chromecast, playback questions, and how to contact the developer.">
   <link rel="canonical" href="https://armstrong-and-getty-podcast.web.app/support">
+  <meta name="apple-itunes-app" content="app-id=6796129205">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/img/icon-48.png">
   <link rel="icon" type="image/svg+xml" href="assets/img/icon.svg">
-  <link rel="stylesheet" href="assets/css/site.css">
+  <link rel="apple-touch-icon" href="assets/img/icon-180.png">
+  <link rel="stylesheet" href="assets/css/site.css?v=20261013">
   <meta name="theme-color" content="#0e0f13">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Armstrong &amp; Getty Podcast App">
   <meta property="og:title" content="Support &amp; FAQ — Armstrong &amp; Getty Podcast App">
+  <meta property="og:description" content="Help with the unofficial Armstrong &amp; Getty Podcast App: downloads, casting, playback, and how to reach the developer.">
   <meta property="og:url" content="https://armstrong-and-getty-podcast.web.app/support">
+  <meta property="og:image" content="https://armstrong-and-getty-podcast.web.app/assets/img/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
 
   <script type="application/ld+json">
   {
@@ -22,32 +31,37 @@
       {
         "@type": "Question",
         "name": "Is this the official Armstrong & Getty app?",
-        "acceptedAnswer": { "@type": "Answer", "text": "No. This is an unofficial, fan-built companion app. It is not affiliated with, endorsed by, or sponsored by Armstrong & Getty, iHeartMedia, or their affiliates. All show content and audio belong to their respective owners." }
+        "acceptedAnswer": { "@type": "Answer", "text": "No. This is an unofficial, fan-built companion app. It is not affiliated with, endorsed by, or sponsored by Armstrong & Getty, iHeartMedia, or their affiliates. All show content and audio belong to their respective owners. For the show itself — stations, live streams, contact — visit <a href=\"https://www.armstrongandgetty.com/\">armstrongandgetty.com</a>." }
       },
       {
         "@type": "Question",
         "name": "Is the app free?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Yes. The app is free, with no ads and no in-app purchases." }
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes. It's free, with no in-app purchases, and the app adds no ads of its own. The show's sponsor breaks are part of the episodes and play as published." }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I listen to the show live in the app?",
+        "acceptedAnswer": { "@type": "Answer", "text": "No. The app plays each hour after it's posted to the official podcast, usually the same morning. To listen live, see <a href=\"https://armstrong-and-getty-podcast.web.app/how-to-listen\">How to listen to Armstrong & Getty</a>." }
       },
       {
         "@type": "Question",
         "name": "Why is the show one big daily episode instead of separate hours?",
-        "acceptedAnswer": { "@type": "Answer", "text": "The app assembles all of the day's broadcast segments into a single episode per show day, in broadcast order, so you can listen straight through. You can still jump between segments with the skip controls." }
+        "acceptedAnswer": { "@type": "Answer", "text": "The official podcast posts each hour as a separate episode, mixed in with extras (<a href=\"https://armstrong-and-getty-podcast.web.app/podcast-feeds\">here's how the feeds work</a>). The app assembles everything posted for a show day into a single episode, in the order it was posted, so you can listen straight through, and you can tap any segment in the episode's segment list to jump straight to it." }
       },
       {
         "@type": "Question",
         "name": "Can I listen offline?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Yes. Tap Download Episode on any day and the full show is saved to your device. Downloads play without any connection, and you can delete them any time to free up space." }
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes. Tap Download Episode on any day and the full show is saved to your device. Downloads play with no connection at all, and the trash icon removes them when you're done." }
       },
       {
         "@type": "Question",
         "name": "How does Chromecast work?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Tap the Cast icon in the top-right of the app and pick a device on your Wi-Fi network. The Cast device streams the episode directly, and your phone stays the remote. Your phone and the Cast device must be on the same network." }
+        "acceptedAnswer": { "@type": "Answer", "text": "Tap the Cast icon in the top-right corner and pick a speaker or TV on your Wi-Fi network. The Cast device streams the episode directly from the internet, and your phone stays the remote — you can even leave the room. Both devices must be on the same Wi-Fi network. If no devices show up, check that your phone isn't on a guest network or a VPN. On iPhone there's also an AirPlay button, which sends the show to AirPlay speakers and TVs." }
       },
       {
         "@type": "Question",
         "name": "Do I need an account?",
-        "acceptedAnswer": { "@type": "Answer", "text": "No. There is nothing to sign up for — install the app and listen." }
+        "acceptedAnswer": { "@type": "Answer", "text": "No. There's nothing to sign up for — install the app and listen. See the <a href=\"https://armstrong-and-getty-podcast.web.app/privacy\">privacy policy</a> for the full story on data." }
       }
     ]
   }
@@ -63,9 +77,10 @@
         <span class="brand-name">Armstrong &amp; Getty <span class="brand-suffix">Podcast App</span></span>
       </a>
       <nav class="site-nav" aria-label="Site">
-        <a href="./#features">Features</a>
+        <a href="./#features" class="hide-sm">Features</a>
+        <a href="how-to-listen">How to listen</a>
+        <a href="podcast-feeds">Podcasts</a>
         <a href="support" aria-current="page">Support</a>
-        <a href="privacy">Privacy</a>
       </nav>
     </div>
   </header>
@@ -93,13 +108,22 @@
       </details>
       <details>
         <summary>Is the app free?</summary>
-        <p>Yes. Free, no ads, no in-app purchases.</p>
+        <p>Yes. It's free, with no in-app purchases, and the app adds no ads of its own.
+        The show's sponsor breaks are part of the episodes and play as published.</p>
+      </details>
+      <details>
+        <summary>Can I listen to the show live in the app?</summary>
+        <p>No. The app plays each hour after it's posted to the official podcast, usually
+        the same morning. To listen live, see
+        <a href="how-to-listen">How to listen to Armstrong &amp; Getty</a>.</p>
       </details>
       <details>
         <summary>Why is the show one big daily episode instead of separate hours?</summary>
-        <p>The app assembles all of the day's broadcast segments into a single episode
-        per show day, in broadcast order, so you can listen straight through — and the
-        segment-skip control lets you hop between hours when you want to.</p>
+        <p>The official podcast posts each hour as a separate episode, mixed in with
+        extras (<a href="podcast-feeds">here's how the feeds work</a>). The app assembles
+        everything posted for a show day into a single episode, in the order it was
+        posted, so you can listen straight through, and you can tap any segment in the
+        episode's segment list to jump straight to it.</p>
       </details>
       <details>
         <summary>Can I listen offline?</summary>
@@ -113,7 +137,8 @@
         Wi-Fi network. The Cast device streams the episode directly from the internet,
         and your phone stays the remote — you can even leave the room. Both devices must
         be on the same Wi-Fi network. If no devices show up, check that your phone isn't
-        on a guest network or a VPN.</p>
+        on a guest network or a VPN. On iPhone there's also an AirPlay button, which sends
+        the show to AirPlay speakers and TVs.</p>
       </details>
       <details>
         <summary>Playback stops when my screen locks — what gives?</summary>
@@ -153,15 +178,21 @@
       <div class="cols">
         <nav aria-label="Footer">
           <a href="./">Home</a>
+          <a href="how-to-listen">How to listen</a>
+          <a href="podcast-feeds">Podcasts</a>
           <a href="support">Support</a>
           <a href="privacy">Privacy Policy</a>
           <a href="terms">Terms of Use</a>
         </nav>
-        <p style="margin:0">© 2026 nomnomsom.com</p>
+        <p style="margin:0">© 2026 nomnomsom.com · <a href="mailto:brett@nomnomsom.com">brett@nomnomsom.com</a></p>
       </div>
       <p class="disclaimer">
         This is an unofficial companion app and website, not affiliated with, endorsed by,
         or sponsored by Armstrong&nbsp;&amp;&nbsp;Getty, iHeartMedia, or their affiliates.
+        "Armstrong&nbsp;&amp;&nbsp;Getty" and all show content, names, and audio are the
+        property of their respective owners. Apple, the App&nbsp;Store, AirPlay and CarPlay are
+        trademarks of Apple&nbsp;Inc. Google&nbsp;Play, Google&nbsp;Cast and Chromecast are
+        trademarks of Google&nbsp;LLC.
       </p>
     </div>
   </footer>
