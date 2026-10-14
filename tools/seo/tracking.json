@@ -1,0 +1,94 @@
+{
+  "market": { "location_code": 2840, "language_code": "en" },
+  "site": "armstrong-and-getty-podcast.web.app",
+  "apps": {
+    "apple": "6796129205",
+    "google": "com.nomnomsom.armstrongandgetty"
+  },
+  "competitor_domains": ["armstrongandgetty.com"],
+  "competitor_pages": [
+    "https://www.iheart.com/podcast/64-armstrong-getty-on-demand-20474616/",
+    "https://podcasts.apple.com/us/podcast/armstrong-getty-on-demand/id1259438987",
+    "https://kste.iheart.com/featured/armstrong-and-getty/"
+  ],
+  "competitor_apps": {
+    "apple": {
+      "290638154": "iHeart: Radio, Music, Podcasts",
+      "1195135449": "Conservative Talk Radio (NewsLeap)",
+      "341295335": "KSFO-AM (Cumulus)",
+      "1499420968": "Mark Levin Show Podcast (unofficial)",
+      "1634396102": "Clay and Buck (Premiere)",
+      "6444029737": "The Walton and Johnson Show",
+      "1295203533": "Bob and Sheri",
+      "1269365385": "Talk Right",
+      "402203488": "Talk Stream",
+      "501892721": "Talk Radio+"
+    },
+    "google": {
+      "com.clearchannel.iheartradio.controller": "iHeart",
+      "com.henapp.talk650kste": "Talk 650 KSTE (third-party)",
+      "com.airkast.KSFOAM": "KSFO-AM (Cumulus)",
+      "com.allinoneapps.ksforadio": "KSFO radio (third-party)",
+      "com.allinoneapps.kfbksacramentoradio931app": "KFBK radio (third-party)",
+      "com.talkstreamlive.android": "Talk Stream Live",
+      "com.talkstreamlive.talkright": "Talk Right",
+      "com.MyIndieApp.FreeTalkRadio": "Free Talk Radio"
+    }
+  },
+  "discovery_seeds": {
+    "suggestions": ["armstrong and getty", "armstrong getty"],
+    "related": ["armstrong and getty podcast"],
+    "ideas": ["talk radio app", "talk radio podcast", "conservative talk radio"]
+  },
+  "keywords": [
+    "a and g podcast", "a&g podcast", "a&g podcast app", "a&g show", "a&g show podcast",
+    "armstrong & getty", "armstrong & getty app", "armstrong & getty on demand",
+    "armstrong & getty on demand podcast", "armstrong & getty podcast", "armstrong & getty podcast app",
+    "armstrong and getty", "armstrong and getty alexa", "armstrong and getty android",
+    "armstrong and getty android auto", "armstrong and getty app", "armstrong and getty app android",
+    "armstrong and getty app iphone", "armstrong and getty apple podcasts", "armstrong and getty carplay",
+    "armstrong and getty chromecast", "armstrong and getty download", "armstrong and getty extra large",
+    "armstrong and getty extra large interviews", "armstrong and getty full episode",
+    "armstrong and getty full show", "armstrong and getty full show podcast", "armstrong and getty hot links",
+    "armstrong and getty hour 1", "armstrong and getty iheart", "armstrong and getty iheart podcast",
+    "armstrong and getty iphone app", "armstrong and getty kabc", "armstrong and getty kex",
+    "armstrong and getty ksfo", "armstrong and getty kste", "armstrong and getty las vegas",
+    "armstrong and getty listen", "armstrong and getty live", "armstrong and getty live stream",
+    "armstrong and getty mailbag", "armstrong and getty missed show", "armstrong and getty news",
+    "armstrong and getty on demand", "armstrong and getty one more thing", "armstrong and getty phoenix",
+    "armstrong and getty podcast", "armstrong and getty podcast ad free", "armstrong and getty podcast all hours",
+    "armstrong and getty podcast android", "armstrong and getty podcast app", "armstrong and getty podcast app android",
+    "armstrong and getty podcast download", "armstrong and getty podcast full show",
+    "armstrong and getty podcast missing hours", "armstrong and getty podcast not updating",
+    "armstrong and getty podcast today", "armstrong and getty radio", "armstrong and getty radio stations",
+    "armstrong and getty replay", "armstrong and getty rss feed", "armstrong and getty schedule",
+    "armstrong and getty seattle", "armstrong and getty select cuts", "armstrong and getty show",
+    "armstrong and getty show podcast", "armstrong and getty show today", "armstrong and getty spotify",
+    "armstrong and getty station", "armstrong and getty station list", "armstrong and getty stations",
+    "armstrong and getty time eastern", "armstrong and getty today", "armstrong and getty today's show",
+    "armstrong and getty weekend show", "armstrong and getty youtube", "armstrong getty",
+    "armstrong getty iheart", "armstrong getty on demand podcast", "armstrong getty podcast",
+    "armstrong getty show today", "conservative talk radio app", "conservative talk radio podcast",
+    "download talk radio shows", "how to listen to armstrong and getty", "is there an armstrong and getty app",
+    "jack and joe podcast", "jack armstrong", "jack armstrong and joe getty podcast", "jack armstrong joe getty",
+    "jack armstrong joe getty podcast", "joe getty", "katie green armstrong and getty", "kste 650", "kste live",
+    "listen to armstrong and getty", "listen to armstrong and getty live", "podcast app android auto",
+    "talk 650 kste", "talk radio app", "talk radio on demand", "talk radio podcast app",
+    "what station is armstrong and getty on", "what time is armstrong and getty on"
+  ],
+  "serp_must_include": [
+    "armstrong and getty", "armstrong and getty podcast", "armstrong and getty app",
+    "armstrong & getty podcast app", "armstrong and getty on demand", "armstrong and getty full show",
+    "listen to armstrong and getty", "how to listen to armstrong and getty", "armstrong and getty podcast app",
+    "armstrong and getty stations", "armstrong and getty replay", "armstrong and getty live stream"
+  ],
+  "store_keywords": [
+    "armstrong and getty", "armstrong getty", "armstrong & getty", "armstrong", "getty", "a&g",
+    "a&g podcast", "armstrong getty podcast", "armstrong and getty podcast", "armstrong and getty show",
+    "armstrong and getty on demand", "jack armstrong", "joe getty", "jack and joe",
+    "talk radio", "talk radio podcast", "conservative talk radio", "conservative radio", "conservative podcast",
+    "news talk", "news talk radio", "political podcast", "politics podcast", "talk show", "talk shows",
+    "radio shows", "radio podcast", "daily podcast", "podcast player", "podcast app",
+    "kste", "kfbk", "ksfo", "kftk", "kex", "kxl", "kabc", "sacramento radio", "iheart", "one more thing"
+  ]
+}

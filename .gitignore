@@ -139,3 +139,6 @@ screenshots/ag-*/
 
 # Firebase CLI deploy cache
 .firebase/
+
+# DataForSEO raw measurement snapshots (tools/seo/dataforseo_pass.py) — local only
+tools/seo/data/

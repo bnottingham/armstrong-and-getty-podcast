@@ -107,6 +107,16 @@ back/forward slots, ±10s in the secondary slots (surfaces on Auto/Wear).
 - `.github/workflows/ios-release.yml` is a dispatch-only scaffold that fails fast
   until the Apple signing secrets listed in its header are configured.
 
+## SEO research tooling
+
+Keyword/SERP/backlink/rank data comes from DataForSEO through two MCP servers: `openseo`
+(project `.mcp.json` → self-hosted OpenSEO at `localhost:3001`, sibling checkout
+`../open-seo`, shared with Renew; skills vendored in `.claude/skills/`) and `dataforseo`
+(user-scoped, hosted, OAuth — use it for App Store / Google Play data OpenSEO lacks).
+Credentials live in the Keychain (`dataforseo-api`), never in this repo. Every call costs
+money: confirm before batches over ~2,000 credits. Setup, recovery, and `.ai` response
+caveats: `tools/seo/README.md`.
+
 ## Upgrade-in-place invariants (Android)
 
 The app replaced an earlier native app. These names must never change: applicationId,
