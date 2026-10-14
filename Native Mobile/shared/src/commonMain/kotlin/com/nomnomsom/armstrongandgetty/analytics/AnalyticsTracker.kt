@@ -42,6 +42,15 @@ object AnalyticsEvents {
     const val ABOUT_LINK_OPEN = "about_link_open"
 
     /**
+     * A download was held back because "Download over Wi-Fi only" is on and the device isn't
+     * on Wi-Fi. Not a failure. Params: episode_date, `source` = manual | auto | background.
+     */
+    const val DOWNLOAD_WAITING_WIFI = "download_waiting_wifi"
+
+    /** The listener turned "Download over Wi-Fi only" on or off. Params: `enabled`, `source` = about | dialog. */
+    const val DOWNLOAD_WIFI_ONLY_SET = "download_wifi_only_set"
+
+    /**
      * The app asked the platform for its review flow. Never means "shown" or "rated".
      * `result` = called | context_gone | unavailable (the last two are given back).
      */
@@ -65,4 +74,6 @@ object AnalyticsEvents {
     const val PARAM_MOMENT = "moment"
     const val PARAM_REQUEST_NUMBER = "request_number"
     const val PARAM_QUALIFYING_DAYS = "qualifying_days"
+    const val PARAM_ENABLED = "enabled"
+    const val PARAM_SOURCE = "source"
 }

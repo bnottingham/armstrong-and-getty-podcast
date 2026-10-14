@@ -44,6 +44,21 @@ actual fun platformModule(): Module = module {
 
     single { HttpClient(Darwin) { httpTimeouts() } }
 
+    // Episode audio only. While "Download over Wi-Fi only" is on, every request refuses
+    // expensive routes (cellular, Personal Hotspot, Wi-Fi Assist). configureRequest runs per
+    // request, so it follows the live setting; with the setting off it changes nothing.
+    single(AudioHttpClient) {
+        val downloadSettings = get<DownloadSettings>()
+        HttpClient(Darwin) {
+            httpTimeouts()
+            engine {
+                configureRequest {
+                    if (downloadSettings.wifiOnly.value) setAllowsExpensiveNetworkAccess(false)
+                }
+            }
+        }
+    }
+
     single { UserDeletionTracker() }
 
     single<PlatformPlayer> { CastAwarePlatformPlayer(AvPlatformPlayer()) }

@@ -57,6 +57,19 @@ class ReviewBlockerTest {
         assertTrue(hasVisibleReviewBlocker(quietList.copy(isRefreshing = true), emptyMap()))
     }
 
+    /**
+     * "Download over Wi-Fi only" held a download back: the day stays NONE and nothing enters
+     * segmentsFailed. Waiting for Wi-Fi is not a problem the listener has to deal with.
+     */
+    @Test
+    fun aDownloadWaitingForWifiDoesNotBlock() {
+        val deferred = quietList.copy(days = listOf(day("2026-10-14", DownloadState.NONE)) + quietList.days)
+        // The tracker drops a held segment from in-progress without marking it failed.
+        val progress = mapOf("2026-10-14" to DownloadProgress(totalSegments = 4))
+        assertFalse(hasVisibleReviewBlocker(deferred, progress))
+        assertFalse(hasVisibleReviewBlocker(deferred, emptyMap()))
+    }
+
     /** Today's hours download in the background most mornings; that alone is not a problem. */
     @Test
     fun aHealthyDownloadInProgressDoesNotBlock() {

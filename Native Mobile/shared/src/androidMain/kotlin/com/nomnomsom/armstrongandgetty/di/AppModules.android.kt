@@ -35,6 +35,9 @@ actual fun platformModule(): Module = module {
     }
 
     single { HttpClient(OkHttp) { httpTimeouts() } }
+    // Same client for audio: the Wi-Fi-only gate is enforced in code (PodcastRepository +
+    // AudioDownloader); an OkHttp socket bound to Wi-Fi dies with Wi-Fi.
+    single(AudioHttpClient) { get<HttpClient>() }
 
     single { UserDeletionTracker(androidContext()) }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,19 +25,25 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
+import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.review.StoreLinks
 import com.nomnomsom.armstrongandgetty.ui.icons.AppIcons
 import com.nomnomsom.armstrongandgetty.ui.icons.Article
@@ -49,6 +56,7 @@ import com.nomnomsom.armstrongandgetty.ui.icons.Phone
 import com.nomnomsom.armstrongandgetty.ui.icons.Public
 import com.nomnomsom.armstrongandgetty.ui.icons.ShoppingBag
 import com.nomnomsom.armstrongandgetty.ui.icons.Star
+import com.nomnomsom.armstrongandgetty.ui.icons.Wifi
 import com.nomnomsom.armstrongandgetty.ui.icons.XLogo
 import com.nomnomsom.armstrongandgetty.ui.icons.YouTube
 import com.nomnomsom.armstrongandgetty.ui.theme.CardBg
@@ -145,6 +153,25 @@ fun AboutScreen() {
         LinkRow(AppIcons.Star, "Rate the App", "Leave a rating on ${StoreLinks.storeName}") {
             openFirst("rate_app", StoreLinks.rateAppUrls)
         }
+        // Default OFF (downloads use Wi-Fi and mobile data). It only governs downloads —
+        // playing and casting are never gated, so the subtitle says so.
+        val downloadSettings: DownloadSettings = koinInject()
+        val wifiOnly by downloadSettings.wifiOnly.collectAsState()
+        ToggleRow(
+            icon = AppIcons.Wifi,
+            title = "Download over Wi-Fi only",
+            subtitle = "When on, episodes download only over Wi-Fi. Playing and casting work on any connection.",
+            checked = wifiOnly,
+        ) { enabled ->
+            downloadSettings.setWifiOnly(enabled)
+            analytics.logEvent(
+                AnalyticsEvents.DOWNLOAD_WIFI_ONLY_SET,
+                mapOf(
+                    AnalyticsEvents.PARAM_ENABLED to enabled.toString(),
+                    AnalyticsEvents.PARAM_SOURCE to "about"
+                )
+            )
+        }
         DeveloperCard { open("developer_email", DEVELOPER_EMAIL_URI) }
 
         Text(
@@ -236,15 +263,7 @@ private fun LinkRow(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Gold.copy(alpha = 0.12f))
-            ) {
-                Icon(icon, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
-            }
+            IconTile(icon)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
@@ -261,6 +280,69 @@ private fun LinkRow(
                 modifier = Modifier.size(16.dp)
             )
         }
+    }
+}
+
+/** A [LinkRow]-styled card with a trailing switch; the whole card toggles. */
+@Composable
+private fun ToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            IconTile(icon)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = DarkBg,
+                    checkedTrackColor = Gold,
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = DarkBg,
+                    uncheckedBorderColor = TextMuted
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun IconTile(icon: ImageVector) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Gold.copy(alpha = 0.12f))
+    ) {
+        Icon(icon, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
     }
 }
 

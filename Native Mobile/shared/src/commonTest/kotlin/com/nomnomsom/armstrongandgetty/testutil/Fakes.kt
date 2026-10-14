@@ -11,6 +11,7 @@ import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentStore
 import com.nomnomsom.armstrongandgetty.download.NetworkKind
 import com.nomnomsom.armstrongandgetty.download.NetworkStatus
+import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -107,6 +108,12 @@ class FakeSegmentStore : SegmentStore {
     /** Indices whose transfer fails (any date). */
     val failIndices = mutableSetOf<Int>()
 
+    /**
+     * Indices whose transfer AudioDownloader's Wi-Fi-only backstop holds back (any date):
+     * `Failure(index, WifiRequiredException())` without a transfer.
+     */
+    val wifiBlockedIndices = mutableSetOf<Int>()
+
     /** When set, every new transfer suspends here until the gate completes. */
     var transferGate: CompletableDeferred<Unit>? = null
 
@@ -121,6 +128,9 @@ class FakeSegmentStore : SegmentStore {
     private suspend fun transfer(date: String, index: Int): SegmentDownloadOutcome {
         if (date to index in disk) {
             return SegmentDownloadOutcome.Success(index, path(date, index), FAKE_SEGMENT_DURATION_MS)
+        }
+        if (index in wifiBlockedIndices) {
+            return SegmentDownloadOutcome.Failure(index, WifiRequiredException())
         }
         onTransferStarted?.complete(Unit)
         transferGate?.await()

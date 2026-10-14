@@ -11,6 +11,8 @@ import com.nomnomsom.armstrongandgetty.data.remote.DownloadProgressCallback
 import com.nomnomsom.armstrongandgetty.data.remote.FeedSource
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentDownloadOutcome
 import com.nomnomsom.armstrongandgetty.data.remote.SegmentStore
+import com.nomnomsom.armstrongandgetty.download.DownloadGate
+import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.util.AppLog
 import com.nomnomsom.armstrongandgetty.util.nowMs
 import kotlinx.coroutines.CancellationException
@@ -44,7 +46,11 @@ class PodcastRepository(
     // users east of UTC while segments are still being published.
     private val todayProvider: () -> LocalDate = {
         Clock.System.todayIn(TimeZone.UTC)
-    }
+    },
+    // "Download over Wi-Fi only" (default off → always allowed). Checked before any download
+    // state change; a block returns WifiRequiredException and leaves the day as it was.
+    // Feed refresh is never gated.
+    private val downloadGate: DownloadGate = DownloadGate.Always
 ) {
     companion object {
         private const val TAG = "PodcastRepository"
@@ -156,6 +162,8 @@ class PodcastRepository(
         var segmentsForCleanup: List<Segment> = emptyList()
         var summaryForCleanup = ""
         var isCompleteForCleanup = false
+        // A cancel while the Wi-Fi-only gate is still deciding must leave the row untouched.
+        var checkingGate = false
 
         try {
             val day = dao.getDayByDate(date)
@@ -173,11 +181,20 @@ class PodcastRepository(
                 return@withDayDownloadLock Result.success(date)
             }
 
+            checkingGate = true
+            val allowed = downloadGate.allowedNow()
+            checkingGate = false
+            if (!allowed) {
+                AppLog.d(TAG, "downloadDay $date held: Wi-Fi only is on and not on Wi-Fi")
+                return@withDayDownloadLock Result.failure(WifiRequiredException())
+            }
+
             dao.updateDownloadState(date, DownloadState.DOWNLOADING.value)
 
             val outcomes = audioDownloader.downloadSegments(date, segments, onProgress)
             finalizeDownload(date, segments, outcomes, day.summary, day.isComplete)
         } catch (e: CancellationException) {
+            if (checkingGate) throw e
             // The viewModelScope job was cancelled (user hit Cancel, or screen was torn down).
             // Without this NonCancellable cleanup the row would be left at DOWNLOADING forever.
             withContext(NonCancellable) {
@@ -263,6 +280,12 @@ class PodcastRepository(
             )
         }
 
+        // The refresh above already recorded the new hours; only the transfer waits for Wi-Fi.
+        if (!downloadGate.allowedNow()) {
+            AppLog.d(TAG, "appendNewSegments $date held: Wi-Fi only is on and not on Wi-Fi")
+            return@withDayDownloadLock Result.failure(WifiRequiredException())
+        }
+
         val outcomes = audioDownloader.downloadSegments(date, updatedSegments, onProgress)
         val finalizeResult = finalizeDownload(
             date = date,
@@ -302,6 +325,11 @@ class PodcastRepository(
         val segments = parseSegments(day.segmentsJson)
         val segment = segments.getOrNull(index)
             ?: return@withDayDownloadLock Result.failure(Exception("Segment $index out of range"))
+
+        if (!downloadGate.allowedNow()) {
+            AppLog.d(TAG, "retrySegment $date#$index held: Wi-Fi only is on and not on Wi-Fi")
+            return@withDayDownloadLock Result.failure(WifiRequiredException())
+        }
 
         val outcome = audioDownloader.downloadSingleSegment(
             date = date,
@@ -346,13 +374,24 @@ class PodcastRepository(
         persistMergedSegments(date, merged, summary, isComplete)
 
         val anyOnDisk = audioDownloader.missingSegmentIndices(date, merged.size).size < merged.size
-        return if (anyOnDisk) {
-            dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
-            Result.success(date)
-        } else {
-            dao.updateDownloadState(date, DownloadState.ERROR.value)
-            val firstFailure = outcomes.filterIsInstance<SegmentDownloadOutcome.Failure>().firstOrNull()
-            Result.failure(firstFailure?.error ?: Exception("Download failed"))
+        val failures = outcomes.filterIsInstance<SegmentDownloadOutcome.Failure>()
+        return when {
+            anyOnDisk -> {
+                dao.updateDownloadState(date, DownloadState.DOWNLOADED.value)
+                Result.success(date)
+            }
+            // Every transfer was held back by the Wi-Fi-only setting (e.g. Wi-Fi dropped before
+            // the first file landed): blocked is not failed, so the card keeps its Download button.
+            failures.isNotEmpty() && failures.all { it.error is WifiRequiredException } -> {
+                dao.updateDownloadState(date, DownloadState.NONE.value)
+                Result.failure(WifiRequiredException())
+            }
+            else -> {
+                dao.updateDownloadState(date, DownloadState.ERROR.value)
+                // Report the real failure, not a block, so callers treat it as failed.
+                val realFailure = failures.firstOrNull { it.error !is WifiRequiredException }
+                Result.failure(realFailure?.error ?: Exception("Download failed"))
+            }
         }
     }
 

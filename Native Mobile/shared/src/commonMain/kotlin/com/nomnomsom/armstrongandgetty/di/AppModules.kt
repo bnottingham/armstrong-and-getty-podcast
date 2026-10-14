@@ -17,14 +17,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
  * Platform module supplies: RoomDatabase.Builder<PodcastDatabase>, the HttpClient
- * (with a platform engine), UserDeletionTracker, PlatformPlayer, AnalyticsTracker,
- * ReviewStateStore, ReviewEnvironment, DownloadSettings and NetworkStatus.
+ * (with a platform engine), the [AudioHttpClient] used only for episode audio,
+ * UserDeletionTracker, PlatformPlayer, AnalyticsTracker, ReviewStateStore,
+ * ReviewEnvironment, DownloadSettings and NetworkStatus.
  */
 expect fun platformModule(): Module
+
+/**
+ * HttpClient for episode audio downloads only. Android: the same OkHttp client. iOS: a
+ * Darwin client that refuses expensive (cellular/hotspot) routes per request while
+ * "Download over Wi-Fi only" is on. The feed keeps the unqualified client, so refresh and
+ * notifications work on any network.
+ */
+val AudioHttpClient = named("audio_http")
 
 /** Default timeouts for the app HttpClient; download attempts override per-request. */
 val httpTimeouts: HttpClientConfig<*>.() -> Unit = {
@@ -44,13 +54,14 @@ val commonModule = module {
     single { get<PodcastDatabase>().podcastDayDao() }
 
     single { RssFeedParser(get()) }
-    single { AudioDownloader(get()) }
+    single { AudioDownloader(get(AudioHttpClient), get<DownloadPolicy>()) }
     single {
         PodcastRepository(
             dao = get(),
             rssFeedParser = get<RssFeedParser>(),
             audioDownloader = get<AudioDownloader>(),
-            deletionTracker = get<UserDeletionTracker>()
+            deletionTracker = get<UserDeletionTracker>(),
+            downloadGate = get<DownloadPolicy>()
         )
     }
 
@@ -71,5 +82,5 @@ val commonModule = module {
         )
     }
 
-    viewModel { EpisodeListViewModel(get(), get(), get(), get()) }
+    viewModel { EpisodeListViewModel(get(), get(), get(), get(), get(), get()) }
 }

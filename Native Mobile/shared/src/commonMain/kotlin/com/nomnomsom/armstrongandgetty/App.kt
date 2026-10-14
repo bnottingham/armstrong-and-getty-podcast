@@ -45,6 +45,7 @@ import com.nomnomsom.armstrongandgetty.ui.icons.Info
 import com.nomnomsom.armstrongandgetty.ui.screens.about.AboutScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
+import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.WifiRequiredDialog
 import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.review.ReviewPromptHost
@@ -83,6 +84,9 @@ fun App() {
         // In-app rating prompt: outside NavHost so it sees the Activity / root VC lifecycle.
         val reviewBlocked by episodeListViewModel.reviewBlocker.collectAsState()
         ReviewPromptHost(currentRoute, blocked = reviewBlocked)
+
+        // "Download over Wi-Fi only" held back a manual tap (Episodes or Player).
+        WifiRequiredDialog(episodeListViewModel)
 
         val isPlayerRoute = currentRoute?.startsWith("player/") == true
         val isTopLevelRoute = currentRoute == "episodes" || currentRoute == "about"

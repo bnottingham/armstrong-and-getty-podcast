@@ -2,6 +2,8 @@ package com.nomnomsom.armstrongandgetty.data.remote
 
 import com.nomnomsom.armstrongandgetty.data.model.DownloadProgress
 import com.nomnomsom.armstrongandgetty.data.model.Segment
+import com.nomnomsom.armstrongandgetty.download.DownloadGate
+import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.platform.podcastsDirPath
 import com.nomnomsom.armstrongandgetty.platform.probeAudioDurationMs
 import com.nomnomsom.armstrongandgetty.util.AppLog
@@ -57,9 +59,17 @@ typealias DownloadProgressCallback = (DownloadProgress) -> Unit
 
 class CancelledByUserException : IOException("Download cancelled by user")
 
+/**
+ * @param gate the "Download over Wi-Fi only" backstop (default off → always allowed). Checked
+ * before every attempt, after every failed attempt and on each watchdog tick, so Wi-Fi
+ * dropping (or the setting being turned on) mid-transfer stops the download instead of
+ * carrying on over mobile data. A block is reported as [WifiRequiredException], never as a
+ * failed segment.
+ */
 @OptIn(ExperimentalAtomicApi::class)
 class AudioDownloader(
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val gate: DownloadGate = DownloadGate.Always
 ) : SegmentStore {
     companion object {
         private const val TAG = "AudioDownloader"
@@ -197,11 +207,16 @@ class AudioDownloader(
         AppLog.d(TAG, "seg $index start: ${segment.audioUrl}")
 
         var lastError: Throwable? = null
+        var blocked = false
         var attempt = 0
         while (attempt < MAX_ATTEMPTS_PER_SEGMENT) {
             if (isCancelled(date, index)) {
                 AppLog.i(TAG, "seg $index cancelled by user before attempt ${attempt + 1}")
                 lastError = CancelledByUserException()
+                break
+            }
+            if (!gate.allowedNow()) {
+                blocked = true
                 break
             }
             try {
@@ -228,6 +243,11 @@ class AudioDownloader(
                     lastError = CancelledByUserException()
                     break
                 }
+                // The watchdog also aborts an attempt when the Wi-Fi-only gate closes.
+                if (!gate.allowedNow()) {
+                    blocked = true
+                    break
+                }
                 lastError = IOException("Transfer aborted (stalled)")
                 AppLog.w(TAG, "seg $index attempt ${attempt + 1}/$MAX_ATTEMPTS_PER_SEGMENT stalled")
             } catch (e: Throwable) {
@@ -237,12 +257,23 @@ class AudioDownloader(
                     AppLog.i(TAG, "seg $index cancelled by user during attempt ${attempt + 1}")
                     break
                 }
+                // Wi-Fi went away (or iOS refused an expensive route): don't spend retries on it.
+                if (!gate.allowedNow()) {
+                    blocked = true
+                    break
+                }
                 AppLog.w(TAG, "seg $index attempt ${attempt + 1}/$MAX_ATTEMPTS_PER_SEGMENT failed: ${e.message}")
             }
             if (attempt < MAX_ATTEMPTS_PER_SEGMENT - 1) {
                 delay(RETRY_BACKOFF_MS * (attempt + 1))
             }
             attempt++
+        }
+
+        if (blocked) {
+            AppLog.i(TAG, "seg $index held: Download over Wi-Fi only is on and not on Wi-Fi")
+            tracker.markBlocked(index)
+            return SegmentDownloadOutcome.Failure(index, WifiRequiredException())
         }
 
         if (isCancelled(date, index)) {
@@ -284,6 +315,11 @@ class AudioDownloader(
         val watchdog: Job = launch {
             while (isActive) {
                 delay(STALL_CHECK_INTERVAL_MS)
+                if (!gate.allowedNow()) {
+                    AppLog.i(TAG, "seg $index Wi-Fi only is on and Wi-Fi is gone — cancelling attempt")
+                    attemptJob.cancel()
+                    break
+                }
                 val sinceProgressMs = elapsedMs() - lastBytesAtMs.load()
                 if (sinceProgressMs > STALL_TIMEOUT_MS) {
                     AppLog.w(TAG, "seg $index stalled (${sinceProgressMs}ms without bytes) — cancelling attempt")
@@ -412,6 +448,11 @@ class AudioDownloader(
                     totalBytes = aggregateTotal()
                 )
             }
+        }
+
+        /** Held back by the Wi-Fi-only setting: no longer in flight, but NOT failed. */
+        fun markBlocked(index: Int) {
+            forceEmit { it.copy(segmentsInProgress = it.segmentsInProgress - index) }
         }
 
         fun markFailed(index: Int) {
