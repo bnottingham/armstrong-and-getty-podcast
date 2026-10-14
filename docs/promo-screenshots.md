@@ -27,7 +27,22 @@ builder flattens after rendering, then re-reads each file to assert dimensions
 and channel count. `contact-sheet-<profile>.jpg` is regenerated beside each set
 on every full run.
 
-Flags: `--profile=android-phone`, `--only=04`, `--batch=ag-M-D-YY`.
+Flags: `--profile=android-phone`, `--only=04`, `--batch=ag-M-D-YY`, `--recaption`.
+
+**Copy-only changes without the raw captures: `--recaption`.** The raw
+captures are working files and are not kept in git, so they may be gone by the
+time a caption needs fixing (the `ag-8-22-26` batch was, in Oct 2026). With
+`--recaption --only=<id>` the builder renders the slide with a same-size
+placeholder device and pastes only the caption band (rows above `deviceTop`)
+onto the existing output PNG; the real app capture below is untouched. Checked
+on an unchanged slide: the result was pixel-identical to the original (max
+channel delta 1). Feature slides only; use `--only` one slide id at a time.
+
+**Captions are real review excerpts.** Each `quote` must be a verbatim excerpt
+of a real supplied review (the full pool is in the pre-`d2844c8` version of the
+builder). To change what a caption says, pick a different verbatim excerpt —
+never reword a quote. Headlines are our own copy and must not echo the show's
+official tagline or imply affiliation.
 
 ## Capturing the raw sources
 

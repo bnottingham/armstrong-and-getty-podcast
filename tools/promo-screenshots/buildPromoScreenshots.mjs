@@ -41,6 +41,12 @@ const readFlag = (name, fallback) => {
 const batch = readFlag("batch", "ag-8-22-26");
 const only = readFlag("only", "");
 const profileFilter = readFlag("profile", "");
+// --recaption: redraw only the caption band (everything above the device) of
+// existing feature-slide outputs, for copy fixes when the raw captures are no
+// longer on disk. The device frame is rendered with a same-size placeholder so
+// its glow above the bezel matches, then only rows [0, deviceTop) are pasted
+// onto the existing PNG — the real app capture below stays untouched.
+const recaption = args.includes("--recaption");
 
 /* ------------------------------------------------------------------ *
  * Palette — the app's own Compose theme, not re-invented here.
@@ -242,7 +248,9 @@ const slides = [
     id: "06-catalog",
     kind: "feature",
     headline: "The Whole Week,\nStill Waiting",
-    quote: "The full daily broadcast,\nready every morning.",
+    // Not "ready every morning": hour 4 posts ~10:15-10:30 a.m. PT, so the full
+    // day isn't ready for a morning commute (Apple 2.3.1 / Play misleading copy).
+    quote: "Great for listening\non my schedule.",
     shot: "05-catalog.png",
   },
   {
@@ -255,8 +263,12 @@ const slides = [
   {
     id: "08-about",
     kind: "feature",
-    headline: "Smart. Funny.\nIndependent.",
-    quote: "No ads, no account, no clutter.",
+    // Our own line, not the show's "Smart. Funny. Independent Perspective."
+    // tagline — the app is unofficial and its marketing must not read as the
+    // show's. The quote avoids "No ads": the app has none, but the episodes
+    // carry the show's own ads.
+    headline: "Made By A Fan,\nFor The Fans",
+    quote: "One clean episode per day,\noffline access, smooth controls.",
     shot: "04-about.png",
   },
 ];
@@ -610,10 +622,12 @@ try {
       );
     }
 
-    const present = new Set(await readdir(shotsDir));
-    for (const slide of slides) {
-      if (slide.shot && !present.has(slide.shot)) {
-        throw new Error(`Missing source capture ${slide.shot} in ${shotsDir}`);
+    if (!recaption) {
+      const present = new Set(await readdir(shotsDir));
+      for (const slide of slides) {
+        if (slide.shot && !present.has(slide.shot)) {
+          throw new Error(`Missing source capture ${slide.shot} in ${shotsDir}`);
+        }
       }
     }
 
@@ -621,10 +635,21 @@ try {
     // one system — the reference set has no status bars either, and Android's
     // notification icons cannot be reliably suppressed on a modern emulator.
     // The raw captures under screenshots/ stay untouched as evidence.
+    // In --recaption mode each capture is a same-size placeholder: every raw
+    // capture is taken at the profile's own dimensions (see the docs), so the
+    // device box — and its glow above the bezel — lays out identically.
     const framedDir = path.join(staging, `${name}-shots`);
     await mkdir(framedDir, { recursive: true });
     const framed = new Map();
     for (const shot of new Set(slides.filter((s) => s.shot).map((s) => s.shot))) {
+      if (recaption) {
+        const height = profile.height - profile.statusBarCrop;
+        await sharp({ create: { width: profile.width, height, channels: 3, background: T.card } })
+          .png()
+          .toFile(path.join(framedDir, shot));
+        framed.set(shot, { width: profile.width, height });
+        continue;
+      }
       const meta = await sharp(path.join(shotsDir, shot)).metadata();
       const height = meta.height - profile.statusBarCrop;
       await sharp(path.join(shotsDir, shot))
@@ -654,7 +679,7 @@ try {
     // Prune outputs from an earlier slide list. Without this a renamed or
     // dropped slide leaves an orphan PNG sitting in the upload folder, which
     // is the kind of thing that only gets noticed in App Store Connect.
-    if (!only) {
+    if (!only && !recaption) {
       const expected = new Set(slides.map((slide) => `${slide.id}.png`));
       for (const file of await readdir(outDir)) {
         if (file.endsWith(".png") && !expected.has(file)) {
@@ -674,6 +699,7 @@ try {
     const written = [];
     for (const slide of slides) {
       if (only && !slide.id.startsWith(only)) continue;
+      if (recaption && slide.kind !== "feature") continue;
 
       const htmlPath = path.join(staging, `${name}-${slide.id}.html`);
       await writeFile(htmlPath, document_(slide, profile, framedDir), "utf8");
@@ -690,6 +716,22 @@ try {
       }
 
       const target = path.join(outDir, `${slide.id}.png`);
+      if (recaption) {
+        const fresh = await page.screenshot({ type: "png", omitBackground: false });
+        const band = await sharp(fresh)
+          .extract({ left: 0, top: 0, width: profile.width, height: profile.L.deviceTop })
+          .removeAlpha()
+          .png()
+          .toBuffer();
+        const merged = await sharp(await readFile(target))
+          .composite([{ input: band, left: 0, top: 0 }])
+          .png()
+          .toBuffer();
+        await writeFile(target, merged);
+        written.push(target);
+        console.log(`  ✓ ${slide.id}.png (caption band re-rendered)`);
+        continue;
+      }
       await page.screenshot({ path: target, type: "png", omitBackground: false });
       written.push(target);
       console.log(`  ✓ ${slide.id}.png`);
@@ -709,14 +751,15 @@ try {
       }
     }
 
-    if (!only) {
+    if (!only || recaption) {
       const sheet = path.join(path.dirname(outDir), `contact-sheet-${path.basename(outDir)}.jpg`);
+      const all = slides.map((slide) => path.join(outDir, `${slide.id}.png`));
       const TILE_W = 420;
       const TILE_H = Math.round((TILE_W * profile.height) / profile.width);
       const GAP = 14;
       const COLS = 4;
-      const rows = Math.ceil(written.length / COLS);
-      const tiles = await Promise.all(written.map((f) => sharp(f).resize(TILE_W, TILE_H).toBuffer()));
+      const rows = Math.ceil(all.length / COLS);
+      const tiles = await Promise.all(all.map((f) => sharp(f).resize(TILE_W, TILE_H).toBuffer()));
       await sharp({
         create: {
           width: COLS * TILE_W + (COLS + 1) * GAP,
