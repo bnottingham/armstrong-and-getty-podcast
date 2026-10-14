@@ -25,6 +25,7 @@ import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
 import com.nomnomsom.armstrongandgetty.download.datesWithNewContent
+import com.nomnomsom.armstrongandgetty.download.newlyPublishedDates
 import com.nomnomsom.armstrongandgetty.download.planAutoDownloads
 import kotlinx.coroutines.CancellationException
 import org.koin.core.component.KoinComponent
@@ -40,6 +41,10 @@ import org.koin.core.component.inject
  * is back. A run with nothing new plans catch-up only while downloads are allowed (on Wi-Fi),
  * and only for today's/latest day. With the setting off (the default) the worker behaves
  * exactly as before and never reads the network.
+ *
+ * A first run (nothing stored yet: fresh install or cleared data) races the app's own first
+ * refresh and takes the feed as a baseline: no notification, and only today's/latest day is
+ * downloaded ([newlyPublishedDates]) — never the two years of show days in the feed.
  */
 class NewEpisodeCheckWorker(
     appContext: Context,
@@ -82,6 +87,15 @@ class NewEpisodeCheckWorker(
             if (latestDate.isBlank()) return Result.success()
 
             val daysAfter = repository.getAllDaysSnapshot()
+            val candidates = autoDownloadCandidates(latestDate, repository.todayKey())
+            val firstRun = daysBefore.isEmpty()
+            // Days new to the database but not newly published (a first run, or the run after
+            // an interrupted first refresh) are neither announced nor downloaded.
+            val published = newlyPublishedDates(daysBefore, daysAfter, candidates)
+            val baselineDays = daysAfter.count { it.date !in daysBefore && it.date !in published }
+            if (baselineDays > 0) {
+                Log.d(TAG, "Feed baseline: $baselineDays stored days aren't new episodes (firstRun=$firstRun)")
+            }
             var newEpisodeFound = false
             var newSegmentsFound = false
             var totalNewSegments = 0
@@ -90,8 +104,10 @@ class NewEpisodeCheckWorker(
                 val previousCount = daysBefore[day.date]
 
                 if (previousCount == null) {
-                    newEpisodeFound = true
-                    totalNewSegments += day.segmentCount
+                    if (day.date in published) {
+                        newEpisodeFound = true
+                        totalNewSegments += day.segmentCount
+                    }
                 } else if (day.segmentCount > previousCount) {
                     newSegmentsFound = true
                     totalNewSegments += (day.segmentCount - previousCount)
@@ -111,7 +127,10 @@ class NewEpisodeCheckWorker(
                 return Result.success()
             }
 
-            if (hasNewContent) {
+            if (hasNewContent && firstRun) {
+                // The listener just installed the app (or cleared its data): nothing is news.
+                Log.d(TAG, "First run: no notification; auto-download manages $candidates")
+            } else if (hasNewContent) {
                 Log.d(TAG, "New content found! newEpisode=$newEpisodeFound newSegments=$newSegmentsFound count=$totalNewSegments")
 
                 val notificationTitle = if (newEpisodeFound) {
@@ -134,12 +153,11 @@ class NewEpisodeCheckWorker(
             }
 
             for (day in daysAfter) {
-                if (daysBefore[day.date] == null && repository.isUserDeleted(day.date)) {
+                if (day.date in published && repository.isUserDeleted(day.date)) {
                     Log.d(TAG, "Skipping auto-download for ${day.date} — user previously deleted")
                 }
             }
 
-            val candidates = autoDownloadCandidates(latestDate, repository.todayKey())
             val fullPlan = planAutoDownloads(
                 daysBefore = daysBefore,
                 daysAfter = daysAfter,

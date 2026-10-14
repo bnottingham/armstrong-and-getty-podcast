@@ -191,6 +191,13 @@ actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/`, `WifiGateTest
   stays `CONNECTED` + `KEEP` — never re-enqueue it for this setting. **Known limit:** catch-up
   covers only latest + today (`autoDownloadCandidates`); a deferred day overtaken by a newer
   show day (or a "Not Now" tap on an older day) waits for a manual Download on Wi-Fi.
+- **First run is a baseline (setting on or off):** a day new to the DB is downloaded or
+  announced only if `newlyPublishedDates` says so — with an empty pre-refresh snapshot (fresh
+  install / cleared data; the worker's first run races the app's first refresh) only
+  `autoDownloadCandidates`; otherwise candidates or days newer than every known day
+  (`refreshFeed` stores newest first, row by row, so an interrupted first refresh leaves a
+  partial snapshot). A first run posts no notification. Without this a first run queued every
+  day in the feed (2024-10-01 on, ~40 MB an hour, any network) — seen Oct 14, 2026.
 - **Background messaging:** with the setting on and no Wi-Fi, a new-episode notification says
   it will download on Wi-Fi instead of "ready". `download_waiting_wifi` (source `background`)
   is logged only for dates with new content (`datesWithNewContent`), not on every run.

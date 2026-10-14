@@ -12,6 +12,7 @@ import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
 import com.nomnomsom.armstrongandgetty.download.datesWithNewContent
+import com.nomnomsom.armstrongandgetty.download.newlyPublishedDates
 import com.nomnomsom.armstrongandgetty.download.planAutoDownloads
 import com.nomnomsom.armstrongandgetty.notifications.AppNotifications
 import com.nomnomsom.armstrongandgetty.util.AppLog
@@ -42,6 +43,9 @@ import platform.UIKit.UIApplicationDidEnterBackgroundNotification
  * downloads off Wi-Fi are held back and caught up by a later run (or app open) on Wi-Fi.
  * With the setting off (the default) the handler behaves exactly as before and never reads
  * the network.
+ *
+ * Like the worker, a first run (nothing stored yet) takes the feed as a baseline: no
+ * notification, and only today's/latest day is downloaded ([newlyPublishedDates]).
  */
 private const val TAG = "BackgroundRefresh"
 private const val TASK_ID = "nomnomsom.armstrongandgetty.refresh"
@@ -121,13 +125,23 @@ private fun handleRefresh(task: BGAppRefreshTask) {
             )
             val latestDate = refreshResult.getOrThrow()
             val daysAfter = repository.getAllDaysSnapshot()
+            val candidates = if (latestDate.isBlank()) emptyList()
+                else autoDownloadCandidates(latestDate, repository.todayKey())
+            // Days new to the database but not newly published (a first run, or the run after
+            // an interrupted first refresh) are neither announced nor downloaded.
+            val published = newlyPublishedDates(daysBefore, daysAfter, candidates)
             val wifiOnly = downloadSettings.wifiOnly.value
             // Setting off (the default): always true, and the network is never read.
             val downloadsAllowed = !wifiOnly || downloadPolicy.allowedNow()
-            notifyIfNewContent(daysBefore, daysAfter, waitsForWifi = !downloadsAllowed)
+            if (daysBefore.isEmpty()) {
+                // The listener just installed the app (or it lost its data): nothing is news.
+                AppLog.d(TAG, "First run: no notification; auto-download manages $candidates")
+            } else {
+                notifyIfNewContent(daysBefore, daysAfter, published, waitsForWifi = !downloadsAllowed)
+            }
 
             for (day in daysAfter) {
-                if (daysBefore[day.date] == null && repository.isUserDeleted(day.date)) {
+                if (day.date in published && repository.isUserDeleted(day.date)) {
                     AppLog.d(TAG, "Skipping auto-download for ${day.date} — user previously deleted")
                 }
             }
@@ -135,8 +149,7 @@ private fun handleRefresh(task: BGAppRefreshTask) {
             val plan = planAutoDownloads(
                 daysBefore = daysBefore,
                 daysAfter = daysAfter,
-                candidateDates = if (latestDate.isBlank()) emptyList()
-                    else autoDownloadCandidates(latestDate, repository.todayKey()),
+                candidateDates = candidates,
                 // Setting on and downloads allowed now: also catch up today's/latest day an
                 // earlier deferral left NONE. Off Wi-Fi those would only be blocked again.
                 catchUp = wifiOnly && downloadsAllowed,
@@ -194,10 +207,16 @@ private data class RefreshDeps(
 
 /**
  * Mirrors NewEpisodeCheckWorker's notification: diff segment counts before/after refresh.
+ * A day new to the database counts only when it is in [published] ([newlyPublishedDates]).
  * [waitsForWifi] = "Download over Wi-Fi only" is on and this isn't Wi-Fi, so a new episode
  * isn't promised as ready.
  */
-private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<PodcastDay>, waitsForWifi: Boolean) {
+private fun notifyIfNewContent(
+    daysBefore: Map<String, Int>,
+    daysAfter: List<PodcastDay>,
+    published: Set<String>,
+    waitsForWifi: Boolean,
+) {
     var newEpisodeFound = false
     var newSegmentsFound = false
     var totalNewSegments = 0
@@ -205,8 +224,10 @@ private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<Pod
     for (day in daysAfter) {
         val previousCount = daysBefore[day.date]
         if (previousCount == null) {
-            newEpisodeFound = true
-            totalNewSegments += day.segmentCount
+            if (day.date in published) {
+                newEpisodeFound = true
+                totalNewSegments += day.segmentCount
+            }
         } else if (day.segmentCount > previousCount) {
             newSegmentsFound = true
             totalNewSegments += (day.segmentCount - previousCount)
