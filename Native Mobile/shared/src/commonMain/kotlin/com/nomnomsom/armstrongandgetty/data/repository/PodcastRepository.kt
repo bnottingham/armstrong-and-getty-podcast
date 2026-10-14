@@ -261,6 +261,15 @@ class PodcastRepository(
 
         val previousSegmentCount = parseSegments(day.segmentsJson).size
 
+        // Checked before the feed fetch: every caller (worker, iOS BG task, app-open pass,
+        // the player's 2-minute live poll) runs this only to download hours, so off Wi-Fi with
+        // the setting on the fetch (~650 KB gzipped) would buy nothing. The worker, BG task and
+        // app open refresh the feed themselves, so new hours are still recorded.
+        if (!downloadGate.allowedNow()) {
+            AppLog.d(TAG, "appendNewSegments $date held: Wi-Fi only is on and not on Wi-Fi")
+            return@withDayDownloadLock Result.failure(WifiRequiredException())
+        }
+
         val refreshResult = refreshFeed()
         if (refreshResult.isFailure) {
             return@withDayDownloadLock Result.failure(refreshResult.exceptionOrNull()!!)
@@ -280,7 +289,7 @@ class PodcastRepository(
             )
         }
 
-        // The refresh above already recorded the new hours; only the transfer waits for Wi-Fi.
+        // Wi-Fi may have gone during the refresh; the refresh still recorded the new hours.
         if (!downloadGate.allowedNow()) {
             AppLog.d(TAG, "appendNewSegments $date held: Wi-Fi only is on and not on Wi-Fi")
             return@withDayDownloadLock Result.failure(WifiRequiredException())

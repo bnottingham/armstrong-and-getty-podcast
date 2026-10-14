@@ -134,6 +134,10 @@ class FakeSegmentStore : SegmentStore {
         }
         onTransferStarted?.complete(Unit)
         transferGate?.await()
+        // Wi-Fi went away (or the setting came on) mid-transfer: the backstop stops it.
+        if (index in wifiBlockedIndices) {
+            return SegmentDownloadOutcome.Failure(index, WifiRequiredException())
+        }
         if (index in failIndices) {
             return SegmentDownloadOutcome.Failure(index, IOException("fake network failure"))
         }

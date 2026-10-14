@@ -91,6 +91,19 @@ class DownloadPolicyTest {
         assertEquals(DownloadPolicy.NETWORK_WAIT_MS, currentTime)
     }
 
+    /** blockedBy() names the reading behind a block so a manual tap can explain it. */
+    @Test
+    fun blockedByNamesTheBlockingReading() = runTest {
+        for (kind in NetworkKind.entries) {
+            val (off, _, offNetwork) = policy(wifiOnly = false, kind = kind)
+            assertEquals(null, off.blockedBy(), "OFF never blocks ($kind)")
+            assertEquals(0, offNetwork.totalCalls, "OFF never reads the network ($kind)")
+
+            val (on, _, _) = policy(wifiOnly = true, kind = kind)
+            assertEquals(if (kind == NetworkKind.UNMETERED) null else kind, on.blockedBy(), "ON with $kind")
+        }
+    }
+
     @Test
     fun allowedFlowFollowsNetworkAndSetting() = runTest {
         val (policy, settings, network) = policy(wifiOnly = true, kind = NetworkKind.METERED)

@@ -24,6 +24,16 @@ fun autoDownloadCandidates(latestDate: String, todayKey: String): List<String> =
     if (todayKey != latestDate) listOf(latestDate, todayKey) else listOf(latestDate)
 
 /**
+ * Dates with content new since [daysBefore]: a day not seen before, or one with more hours.
+ * Background runs log `download_waiting_wifi` only for these, so a day that stays deferred
+ * isn't re-counted on every run.
+ */
+fun datesWithNewContent(daysBefore: Map<String, Int>, daysAfter: List<PodcastDay>): Set<String> =
+    daysAfter
+        .filter { day -> daysBefore[day.date].let { before -> before == null || day.segmentCount > before } }
+        .mapTo(mutableSetOf()) { it.date }
+
+/**
  * Pure planner shared by `NewEpisodeCheckWorker` and the iOS background refresh. Rules, in
  * [daysAfter] order:
  * - a day that is new since [daysBefore] and not user-deleted → [AutoDownloadAction.DownloadDay];
@@ -32,9 +42,12 @@ fun autoDownloadCandidates(latestDate: String, todayKey: String): List<String> =
  *
  * `catchUp = false` reproduces the loop both background paths ran before the Wi-Fi-only
  * setting existed, exactly (AutoDownloadPlanTest holds a reference copy). `catchUp = true`
- * (setting ON) also downloads [candidateDates] left `NONE` by an earlier Wi-Fi-only deferral
- * — not ERROR days (real failures, retried at app open as before), not user-deleted days,
- * and never a second action for the same date.
+ * (setting ON and downloads allowed right now) also downloads [candidateDates] left `NONE` by
+ * an earlier Wi-Fi-only deferral — not ERROR days (real failures, retried at app open as
+ * before), not user-deleted days, and never a second action for the same date.
+ *
+ * Catch-up covers only [candidateDates] (latest + today): a day deferred and then overtaken
+ * by a newer show day is not fetched automatically — the listener taps Download on Wi-Fi.
  */
 fun planAutoDownloads(
     daysBefore: Map<String, Int>,

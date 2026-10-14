@@ -25,3 +25,6 @@ actual fun probeAudioDurationMs(filePath: String): Long {
         retriever.release()
     }
 }
+
+/** Android calls it mobile data (Settings > Network & internet). */
+actual val mobileDataTerm: String = "mobile data"

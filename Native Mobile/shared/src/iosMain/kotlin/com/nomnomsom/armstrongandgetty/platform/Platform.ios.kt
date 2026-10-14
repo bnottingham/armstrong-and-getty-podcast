@@ -29,3 +29,6 @@ actual fun probeAudioDurationMs(filePath: String): Long {
     if (seconds.isNaN() || seconds <= 0.0) return 0L
     return (seconds * 1000).toLong()
 }
+
+/** Apple calls it cellular data (Settings > Cellular). */
+actual val mobileDataTerm: String = "cellular data"

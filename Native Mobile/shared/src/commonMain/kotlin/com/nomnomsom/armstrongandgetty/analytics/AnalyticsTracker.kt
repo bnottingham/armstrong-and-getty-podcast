@@ -43,7 +43,9 @@ object AnalyticsEvents {
 
     /**
      * A download was held back because "Download over Wi-Fi only" is on and the device isn't
-     * on Wi-Fi. Not a failure. Params: episode_date, `source` = manual | auto | background.
+     * on Wi-Fi. Not a failure. Params: episode_date, `source` = manual | auto | background |
+     * setting_changed (the listener turned the setting on while a manual download ran).
+     * Background runs log a date once, when its content is new.
      */
     const val DOWNLOAD_WAITING_WIFI = "download_waiting_wifi"
 

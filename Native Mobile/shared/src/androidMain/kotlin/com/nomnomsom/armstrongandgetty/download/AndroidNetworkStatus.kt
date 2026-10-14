@@ -25,16 +25,17 @@ class AndroidNetworkStatus(private val context: Context) : NetworkStatus {
     private val connectivity: ConnectivityManager?
         get() = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
+    /** No capabilities (no default network) or no INTERNET = offline. */
+    private fun kindOf(caps: NetworkCapabilities?): NetworkKind = when {
+        caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
+            NetworkKind.OFFLINE
+        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) -> NetworkKind.UNMETERED
+        else -> NetworkKind.METERED
+    }
+
     override fun current(): NetworkKind = try {
         val cm = connectivity
-        val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
-        when {
-            cm == null -> NetworkKind.UNKNOWN
-            caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
-                NetworkKind.OFFLINE
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) -> NetworkKind.UNMETERED
-            else -> NetworkKind.METERED
-        }
+        if (cm == null) NetworkKind.UNKNOWN else kindOf(cm.activeNetwork?.let { cm.getNetworkCapabilities(it) })
     } catch (e: Exception) {
         AppLog.w(TAG, "Network query failed: ${e.message}")
         NetworkKind.UNKNOWN
@@ -45,17 +46,18 @@ class AndroidNetworkStatus(private val context: Context) : NetworkStatus {
 
     override fun changes(): Flow<NetworkKind> = callbackFlow {
         trySend(current())
+        // Map what each callback is handed; ConnectivityManager queries made inside these
+        // callbacks can return stale data (NetworkCallback docs). onAvailable needs nothing:
+        // on API 26+ onCapabilitiesChanged always follows it with the new network's caps.
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                trySend(current())
-            }
-
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                trySend(current())
+                trySend(kindOf(networkCapabilities))
             }
 
+            // The default network went away. If another takes over, its own
+            // onAvailable/onCapabilitiesChanged follow and replace this reading.
             override fun onLost(network: Network) {
-                trySend(current())
+                trySend(NetworkKind.OFFLINE)
             }
         }
         val cm = connectivity

@@ -20,9 +20,11 @@ import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.download.AutoDownloadAction
+import com.nomnomsom.armstrongandgetty.download.DownloadPolicy
 import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
+import com.nomnomsom.armstrongandgetty.download.datesWithNewContent
 import com.nomnomsom.armstrongandgetty.download.planAutoDownloads
 import kotlinx.coroutines.CancellationException
 import org.koin.core.component.KoinComponent
@@ -35,7 +37,9 @@ import org.koin.core.component.inject
  * The periodic job ([WORK_NAME]) stays `CONNECTED`: refresh and notifications run on any
  * network. With "Download over Wi-Fi only" on, downloads are held back off Wi-Fi and a
  * one-time [WIFI_WORK_NAME] run (same worker, `UNMETERED`) catches them up as soon as Wi-Fi
- * is back. With the setting off (the default) the worker behaves exactly as before.
+ * is back. A run with nothing new plans catch-up only while downloads are allowed (on Wi-Fi),
+ * and only for today's/latest day. With the setting off (the default) the worker behaves
+ * exactly as before and never reads the network.
  */
 class NewEpisodeCheckWorker(
     appContext: Context,
@@ -44,6 +48,7 @@ class NewEpisodeCheckWorker(
 
     private val repository: PodcastRepository by inject()
     private val downloadSettings: DownloadSettings by inject()
+    private val downloadPolicy: DownloadPolicy by inject()
     private val analytics: AnalyticsTracker by inject()
 
     companion object {
@@ -94,10 +99,14 @@ class NewEpisodeCheckWorker(
             }
 
             val hasNewContent = newEpisodeFound || newSegmentsFound
-            // With Wi-Fi only on, a run with nothing new still plans: on Wi-Fi it catches up
-            // downloads an earlier run deferred. Off (the default): unchanged early return.
             val wifiOnly = downloadSettings.wifiOnly.value
-            if (!hasNewContent && !wifiOnly) {
+            // Setting off (the default): always true, and the network is never read.
+            val downloadsAllowed = !wifiOnly || downloadPolicy.allowedNow()
+            // Catch-up of downloads an earlier run held back: setting on AND allowed right now.
+            // Off Wi-Fi it would only be blocked again (after a feed fetch per partial day), so
+            // such a run keeps the plain early return below.
+            val catchUp = wifiOnly && downloadsAllowed
+            if (!hasNewContent && !catchUp) {
                 Log.d(TAG, "No new content found")
                 return Result.success()
             }
@@ -110,7 +119,10 @@ class NewEpisodeCheckWorker(
                 } else {
                     "New A&G Segments Available"
                 }
-                val notificationBody = if (newEpisodeFound) {
+                val notificationBody = if (newEpisodeFound && !downloadsAllowed) {
+                    // Wi-Fi only is on and this isn't Wi-Fi: don't promise a ready episode.
+                    "Today's show is out — it'll download when you're on Wi-Fi"
+                } else if (newEpisodeFound) {
                     "Today's show is ready — $totalNewSegments segment${if (totalNewSegments != 1) "s" else ""} available"
                 } else {
                     "$totalNewSegments new segment${if (totalNewSegments != 1) "s" else ""} added to today's show"
@@ -127,14 +139,20 @@ class NewEpisodeCheckWorker(
                 }
             }
 
-            val plan = planAutoDownloads(
+            val candidates = autoDownloadCandidates(latestDate, repository.todayKey())
+            val fullPlan = planAutoDownloads(
                 daysBefore = daysBefore,
                 daysAfter = daysAfter,
-                candidateDates = autoDownloadCandidates(latestDate, repository.todayKey()),
-                catchUp = wifiOnly,
+                candidateDates = candidates,
+                catchUp = catchUp,
                 isUserDeleted = repository::isUserDeleted,
                 hasAllOnDisk = repository::hasAllSegmentsOnDisk
             )
+            // A catch-up-only run (nothing new; setting on, on Wi-Fi) manages today's/latest day
+            // only, like the app-open pass — an old day's permanently failing hour must not be
+            // retried every 15 minutes. With new content (always, with the setting off) the
+            // plan is unchanged.
+            val plan = if (hasNewContent) fullPlan else fullPlan.filter { it.date in candidates }
 
             val deferredDates = mutableListOf<String>()
             for (action in plan) {
@@ -159,7 +177,10 @@ class NewEpisodeCheckWorker(
 
             if (deferredDates.isNotEmpty()) {
                 Log.d(TAG, "Downloads wait for Wi-Fi (Wi-Fi only is on): $deferredDates")
-                deferredDates.forEach { date ->
+                // Count a deferral once, when its content is new — not again on every run
+                // while it keeps waiting.
+                val newContentDates = datesWithNewContent(daysBefore, daysAfter)
+                deferredDates.filter { it in newContentDates }.forEach { date ->
                     analytics.logEvent(
                         AnalyticsEvents.DOWNLOAD_WAITING_WIFI,
                         mapOf(AnalyticsEvents.PARAM_DATE to date, AnalyticsEvents.PARAM_SOURCE to "background")

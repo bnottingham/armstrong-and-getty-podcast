@@ -24,7 +24,8 @@ import kotlin.test.assertTrue
 /**
  * "Download over Wi-Fi only" enforcement in PodcastRepository, the single choke point every
  * download path goes through. A block must change nothing: no state change (the day stays
- * NONE, never DOWNLOADING or ERROR), no transfer, and the feed refresh still records new hours.
+ * NONE, never DOWNLOADING or ERROR), no transfer, and an append skips its feed fetch (the
+ * plain refresh still records new hours on any network).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class WifiGateTest {
@@ -85,8 +86,13 @@ class WifiGateTest {
         assertTrue(h.store.transferLog.isEmpty())
     }
 
+    /**
+     * Off Wi-Fi with the setting on, an append is held before its feed fetch: every caller
+     * runs it only to download hours, and the player's live poll would otherwise refetch the
+     * whole feed over mobile data every 2 minutes for nothing.
+     */
     @Test
-    fun blockedAppendRecordsNewHoursWithoutTransferring() = runTest {
+    fun blockedAppendSkipsTheFeedFetchAndTransfer() = runTest {
         val h = Harness()
         h.allowed = true
         h.feed.items = BurstDay.feedItems(BurstDay.hour1)
@@ -97,12 +103,17 @@ class WifiGateTest {
         // Off Wi-Fi with the setting on, hour 2 releases.
         h.allowed = false
         h.feed.items = BurstDay.feedItems(BurstDay.hour1, BurstDay.hour2)
+        val fetchesBefore = h.feed.fetchCount
         val result = h.repo.appendNewSegments(BurstDay.DATE)
 
         assertIs<WifiRequiredException>(result.exceptionOrNull())
-        assertEquals(2, h.dao.getDayByDate(BurstDay.DATE)!!.segmentCount, "the refresh still records hour 2")
+        assertEquals(fetchesBefore, h.feed.fetchCount, "no feed fetch while blocked")
         assertEquals(1, h.store.transferLog.size, "no transfer while blocked")
         assertEquals(DownloadState.DOWNLOADED, h.state())
+
+        // The worker / BG task / app-open refresh still records hour 2 on any network.
+        h.repo.refreshFeed()
+        assertEquals(2, h.dao.getDayByDate(BurstDay.DATE)!!.segmentCount)
 
         // Back on Wi-Fi: the same call fetches the missing hour.
         h.allowed = true

@@ -154,13 +154,14 @@ fun AboutScreen() {
             openFirst("rate_app", StoreLinks.rateAppUrls)
         }
         // Default OFF (downloads use Wi-Fi and mobile data). It only governs downloads —
-        // playing and casting are never gated, so the subtitle says so.
+        // playing and casting are never gated, so the subtitle says so. Don't promise
+        // streaming: the phone plays only downloaded hours.
         val downloadSettings: DownloadSettings = koinInject()
         val wifiOnly by downloadSettings.wifiOnly.collectAsState()
         ToggleRow(
             icon = AppIcons.Wifi,
             title = "Download over Wi-Fi only",
-            subtitle = "When on, episodes download only over Wi-Fi. Playing and casting work on any connection.",
+            subtitle = "When on, downloads wait for Wi-Fi. Playing and casting downloaded episodes are never blocked.",
             checked = wifiOnly,
         ) { enabled ->
             downloadSettings.setWifiOnly(enabled)

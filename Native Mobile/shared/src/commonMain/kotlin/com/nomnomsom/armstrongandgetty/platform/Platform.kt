@@ -12,3 +12,6 @@ expect fun podcastsDirPath(): String
  * file can't be probed — callers treat that as "corrupt, re-download".
  */
 expect fun probeAudioDurationMs(filePath: String): Long
+
+/** The platform's own words for a phone's metered data: "cellular data" (iOS) / "mobile data" (Android). */
+expect val mobileDataTerm: String

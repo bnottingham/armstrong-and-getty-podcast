@@ -39,9 +39,17 @@ class DownloadPolicy(
     private val network: NetworkStatus,
 ) : DownloadGate {
 
-    override suspend fun allowedNow(): Boolean {
-        if (!settings.wifiOnly.value) return true // default path: network never consulted
-        return decide(true, network.awaitKnown(NETWORK_WAIT_MS))
+    override suspend fun allowedNow(): Boolean = blockedBy() == null
+
+    /**
+     * Null when downloads may run now; otherwise the network reading that blocks them
+     * (METERED, OFFLINE or UNKNOWN), so a manual tap can explain *why*. With the setting
+     * OFF it returns null without consulting the network (the default path).
+     */
+    suspend fun blockedBy(): NetworkKind? {
+        if (!settings.wifiOnly.value) return null // default path: network never consulted
+        val reading = network.awaitKnown(NETWORK_WAIT_MS)
+        return if (decide(true, reading)) null else reading
     }
 
     /** True whenever downloads may run. With the setting OFF it never subscribes to the network. */

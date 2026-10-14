@@ -184,6 +184,21 @@ class AutoDownloadPlanTest {
     }
 
     @Test
+    fun datesWithNewContentAreNewDaysAndGrownDays() {
+        val brandNew = day("2026-10-16", DownloadState.NONE, segmentCount = 1)
+        val grew = day("2026-10-15", DownloadState.DOWNLOADED, segmentCount = 3)
+        val same = day("2026-10-14", DownloadState.NONE, segmentCount = 4)
+        val shrank = day("2026-10-13", DownloadState.DOWNLOADED, segmentCount = 2)
+        val before = mapOf("2026-10-15" to 2, "2026-10-14" to 4, "2026-10-13" to 3)
+
+        assertEquals(
+            setOf("2026-10-16", "2026-10-15"),
+            datesWithNewContent(before, listOf(brandNew, grew, same, shrank))
+        )
+        assertEquals(emptySet(), datesWithNewContent(before, listOf(same, shrank)))
+    }
+
+    @Test
     fun candidates() {
         assertEquals(listOf("2026-10-14"), autoDownloadCandidates("2026-10-14", "2026-10-14"))
         assertEquals(listOf("2026-10-15", "2026-10-14"), autoDownloadCandidates("2026-10-15", "2026-10-14"))

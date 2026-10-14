@@ -14,6 +14,7 @@ import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.download.DownloadPolicy
 import com.nomnomsom.armstrongandgetty.download.DownloadSettings
+import com.nomnomsom.armstrongandgetty.download.NetworkKind
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
@@ -76,9 +77,22 @@ internal fun hasVisibleReviewBlocker(
 
 /**
  * A manual Download / Retry tap that "Download over Wi-Fi only" held back. Drives
- * [WifiRequiredDialog]; [segmentIndex] is null for a whole-day download.
+ * [WifiRequiredDialog]. [segmentIndex] is null for a whole-day download; [network] is the
+ * reading that blocked it; [partial] = some hours landed before Wi-Fi went away and the rest
+ * are waiting.
  */
-data class WifiRequiredPrompt(val date: String, val segmentIndex: Int? = null)
+data class WifiRequiredPrompt(
+    val date: String,
+    val segmentIndex: Int? = null,
+    val network: NetworkKind = NetworkKind.METERED,
+    val partial: Boolean = false,
+) {
+    /**
+     * "Turn Off & Download" helps only on a metered connection. Offline (or with no reading)
+     * the download would just fail after the listener gave up their data-saving choice.
+     */
+    val offersTurnOff: Boolean get() = network == NetworkKind.METERED
+}
 
 private data class PlayableSegment(
     val originalIndex: Int,
@@ -204,18 +218,20 @@ class EpisodeListViewModel(
     fun downloadDay(date: String) {
         analytics.logEvent(AnalyticsEvents.EPISODE_DOWNLOAD, mapOf(AnalyticsEvents.PARAM_DATE to date))
         launchDownload(date) {
+            // Remembered so a block caused by turning the setting ON mid-download stays silent.
+            val wifiOnlyAtTap = downloadSettings.wifiOnly.value
             // Checked before the deletion mark or any state changes: a blocked tap changes nothing.
-            if (!downloadPolicy.allowedNow()) {
-                promptWifi(date, segmentIndex = null)
+            downloadPolicy.blockedBy()?.let { network ->
+                promptWifi(WifiRequiredPrompt(date, network = network))
                 return@launchDownload
             }
             repository.clearUserDeletion(date)
-            performDownload(date, manual = true)
+            performDownload(date, manual = true, wifiOnlyAtTap = wifiOnlyAtTap)
         }
     }
 
     private fun autoDownload(date: String) {
-        launchDownload(date) { performDownload(date, manual = false) }
+        launchDownload(date) { performDownload(date, manual = false, wifiOnlyAtTap = false) }
     }
 
     private fun launchDownload(date: String, block: suspend () -> Unit) {
@@ -227,7 +243,7 @@ class EpisodeListViewModel(
         job.invokeOnCompletion { downloadJobs.remove(date) }
     }
 
-    private suspend fun performDownload(date: String, manual: Boolean) {
+    private suspend fun performDownload(date: String, manual: Boolean, wifiOnlyAtTap: Boolean) {
         try {
             val result = repository.downloadDay(date) { progress ->
                 _downloadProgress.value = _downloadProgress.value + (date to progress)
@@ -236,17 +252,25 @@ class EpisodeListViewModel(
             when {
                 result.isSuccess -> {
                     sessionHealth.reportSuccess("download")
-                    analytics.logEvent(AnalyticsEvents.DOWNLOAD_COMPLETED, mapOf(AnalyticsEvents.PARAM_DATE to date))
+                    // Some hours landed, then Wi-Fi went away: say the rest is waiting rather
+                    // than calling it complete. Setting off at tap → never checked (default path).
+                    val restBlockedBy = if (manual && wifiOnlyAtTap) restOfDayBlockedBy(date) else null
+                    if (restBlockedBy != null) {
+                        promptWifi(WifiRequiredPrompt(date, network = restBlockedBy, partial = true))
+                    } else {
+                        analytics.logEvent(AnalyticsEvents.DOWNLOAD_COMPLETED, mapOf(AnalyticsEvents.PARAM_DATE to date))
+                    }
                 }
                 // Held back by "Download over Wi-Fi only": blocked, not failed. No SessionHealth
                 // failure, no download_failed, no Crashlytics — the day stays NONE.
-                error is WifiRequiredException -> {
-                    if (manual) {
-                        // Wi-Fi went away between the tap's check and the first transfer.
-                        promptWifi(date, segmentIndex = null)
-                    } else {
-                        logWaitingForWifi(date, source = "auto")
-                    }
+                error is WifiRequiredException -> when {
+                    !manual -> logWaitingForWifi(date, source = "auto")
+                    // The listener turned the setting on while this ran: their choice, no dialog.
+                    !wifiOnlyAtTap -> logWaitingForWifi(date, source = "setting_changed")
+                    // Wi-Fi went away between the tap's check and the first transfer.
+                    else -> promptWifi(
+                        WifiRequiredPrompt(date, network = downloadPolicy.blockedBy() ?: NetworkKind.UNKNOWN)
+                    )
                 }
                 else -> {
                     sessionHealth.reportFailure("download")
@@ -257,6 +281,13 @@ class EpisodeListViewModel(
         } finally {
             _downloadProgress.value = _downloadProgress.value - date
         }
+    }
+
+    /** The reading blocking downloads when [date] still has hours missing; null otherwise. */
+    private suspend fun restOfDayBlockedBy(date: String): NetworkKind? {
+        val network = downloadPolicy.blockedBy() ?: return null
+        val day = repository.getDayByDate(date) ?: return null
+        return if (repository.missingSegmentIndices(date, day.segmentCount).isNotEmpty()) network else null
     }
 
     /** Cancel an in-flight day download. Whatever segments finished stay on disk. */
@@ -277,8 +308,9 @@ class EpisodeListViewModel(
             mapOf(AnalyticsEvents.PARAM_DATE to date, AnalyticsEvents.PARAM_SEGMENT_INDEX to index)
         )
         viewModelScope.launch {
-            if (!downloadPolicy.allowedNow()) {
-                promptWifi(date, segmentIndex = index)
+            val wifiOnlyAtTap = downloadSettings.wifiOnly.value
+            downloadPolicy.blockedBy()?.let { network ->
+                promptWifi(WifiRequiredPrompt(date, segmentIndex = index, network = network))
                 return@launch
             }
             val result = repository.retrySegment(date, index) { progress ->
@@ -286,8 +318,19 @@ class EpisodeListViewModel(
             }
             val error = result.exceptionOrNull()
             if (error is WifiRequiredException) {
-                // Blocked, not failed (Wi-Fi dropped between the check and the transfer).
-                promptWifi(date, segmentIndex = index)
+                // Blocked, not failed: Wi-Fi dropped between the check and the transfer, or the
+                // listener turned the setting on meanwhile (their choice — no dialog).
+                if (wifiOnlyAtTap) {
+                    promptWifi(
+                        WifiRequiredPrompt(
+                            date,
+                            segmentIndex = index,
+                            network = downloadPolicy.blockedBy() ?: NetworkKind.UNKNOWN
+                        )
+                    )
+                } else {
+                    logWaitingForWifi(date, source = "setting_changed")
+                }
             } else if (result.isFailure) {
                 sessionHealth.reportFailure("segment_retry")
                 AppLog.w(TAG, "Segment $index retry failed for $date: ${error?.message}")
@@ -304,9 +347,9 @@ class EpisodeListViewModel(
     }
 
     /** A manual tap was held back: log it and show the dialog (set last). */
-    private fun promptWifi(date: String, segmentIndex: Int?) {
-        logWaitingForWifi(date, source = "manual")
-        _wifiRequiredPrompt.value = WifiRequiredPrompt(date, segmentIndex)
+    private fun promptWifi(prompt: WifiRequiredPrompt) {
+        logWaitingForWifi(prompt.date, source = "manual")
+        _wifiRequiredPrompt.value = prompt
     }
 
     private fun logWaitingForWifi(date: String, source: String) {
@@ -316,10 +359,14 @@ class EpisodeListViewModel(
         )
     }
 
-    /** Dialog's "Turn Off & Download": turn the setting off, then redo the tap that was held back. */
+    /**
+     * Dialog's "Turn Off & Download": turn the setting off, then redo the tap that was held back
+     * (for a partial download, fetch the rest). Offered only on a metered connection.
+     */
     fun turnOffWifiOnlyAndRetry() {
         val prompt = _wifiRequiredPrompt.value ?: return
         _wifiRequiredPrompt.value = null
+        if (!prompt.offersTurnOff) return
         downloadSettings.setWifiOnly(false)
         analytics.logEvent(
             AnalyticsEvents.DOWNLOAD_WIFI_ONLY_SET,

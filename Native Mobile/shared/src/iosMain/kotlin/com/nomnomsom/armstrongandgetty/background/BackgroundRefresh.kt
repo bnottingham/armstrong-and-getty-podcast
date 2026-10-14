@@ -7,9 +7,11 @@ import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.di.ensureKoinStarted
 import com.nomnomsom.armstrongandgetty.download.AutoDownloadAction
+import com.nomnomsom.armstrongandgetty.download.DownloadPolicy
 import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
 import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
+import com.nomnomsom.armstrongandgetty.download.datesWithNewContent
 import com.nomnomsom.armstrongandgetty.download.planAutoDownloads
 import com.nomnomsom.armstrongandgetty.notifications.AppNotifications
 import com.nomnomsom.armstrongandgetty.util.AppLog
@@ -38,7 +40,8 @@ import platform.UIKit.UIApplicationDidEnterBackgroundNotification
  *
  * With "Download over Wi-Fi only" on, refresh and notifications still run on any network;
  * downloads off Wi-Fi are held back and caught up by a later run (or app open) on Wi-Fi.
- * With the setting off (the default) the handler behaves exactly as before.
+ * With the setting off (the default) the handler behaves exactly as before and never reads
+ * the network.
  */
 private const val TAG = "BackgroundRefresh"
 private const val TASK_ID = "nomnomsom.armstrongandgetty.refresh"
@@ -79,16 +82,23 @@ private fun handleRefresh(task: BGAppRefreshTask) {
     // Koin may not be up yet, and the UI may be starting it on the main thread at this same
     // moment (ensureKoinStarted() serializes the two). This runs inside BGTaskScheduler's
     // callback, where an uncaught Kotlin exception aborts the app — fail the task instead.
-    val (repository, analytics, downloadSettings) = try {
+    val deps = try {
         ensureKoinStarted()
         val koin = KoinPlatform.getKoin()
-        Triple(koin.get<PodcastRepository>(), koin.get<AnalyticsTracker>(), koin.get<DownloadSettings>())
+        RefreshDeps(
+            repository = koin.get<PodcastRepository>(),
+            analytics = koin.get<AnalyticsTracker>(),
+            downloadSettings = koin.get<DownloadSettings>(),
+            downloadPolicy = koin.get<DownloadPolicy>(),
+        )
     } catch (e: Exception) {
         AppLog.e(TAG, "Background refresh could not start", e)
         AnalyticsBridgeHolder.tracker.recordError("Background refresh could not start", e)
         task.setTaskCompletedWithSuccess(false)
         return
     }
+
+    val (repository, analytics, downloadSettings, downloadPolicy) = deps
 
     val job = scope.launch {
         try {
@@ -111,7 +121,10 @@ private fun handleRefresh(task: BGAppRefreshTask) {
             )
             val latestDate = refreshResult.getOrThrow()
             val daysAfter = repository.getAllDaysSnapshot()
-            notifyIfNewContent(daysBefore, daysAfter)
+            val wifiOnly = downloadSettings.wifiOnly.value
+            // Setting off (the default): always true, and the network is never read.
+            val downloadsAllowed = !wifiOnly || downloadPolicy.allowedNow()
+            notifyIfNewContent(daysBefore, daysAfter, waitsForWifi = !downloadsAllowed)
 
             for (day in daysAfter) {
                 if (daysBefore[day.date] == null && repository.isUserDeleted(day.date)) {
@@ -124,12 +137,15 @@ private fun handleRefresh(task: BGAppRefreshTask) {
                 daysAfter = daysAfter,
                 candidateDates = if (latestDate.isBlank()) emptyList()
                     else autoDownloadCandidates(latestDate, repository.todayKey()),
-                // Setting on: also catch up today's/latest day an earlier deferral left NONE.
-                catchUp = downloadSettings.wifiOnly.value,
+                // Setting on and downloads allowed now: also catch up today's/latest day an
+                // earlier deferral left NONE. Off Wi-Fi those would only be blocked again.
+                catchUp = wifiOnly && downloadsAllowed,
                 isUserDeleted = repository::isUserDeleted,
                 hasAllOnDisk = repository::hasAllSegmentsOnDisk
             )
 
+            // Count a deferral once, when its content is new — not on every run while it waits.
+            val newContentDates = datesWithNewContent(daysBefore, daysAfter)
             for (action in plan) {
                 val error = when (action) {
                     is AutoDownloadAction.DownloadDay -> {
@@ -147,10 +163,12 @@ private fun handleRefresh(task: BGAppRefreshTask) {
                 }
                 if (error is WifiRequiredException) {
                     AppLog.d(TAG, "Download for ${action.date} waits for Wi-Fi (Wi-Fi only is on)")
-                    analytics.logEvent(
-                        AnalyticsEvents.DOWNLOAD_WAITING_WIFI,
-                        mapOf(AnalyticsEvents.PARAM_DATE to action.date, AnalyticsEvents.PARAM_SOURCE to "background")
-                    )
+                    if (action.date in newContentDates) {
+                        analytics.logEvent(
+                            AnalyticsEvents.DOWNLOAD_WAITING_WIFI,
+                            mapOf(AnalyticsEvents.PARAM_DATE to action.date, AnalyticsEvents.PARAM_SOURCE to "background")
+                        )
+                    }
                 }
             }
 
@@ -167,8 +185,19 @@ private fun handleRefresh(task: BGAppRefreshTask) {
     }
 }
 
-/** Mirrors NewEpisodeCheckWorker's notification: diff segment counts before/after refresh. */
-private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<PodcastDay>) {
+private data class RefreshDeps(
+    val repository: PodcastRepository,
+    val analytics: AnalyticsTracker,
+    val downloadSettings: DownloadSettings,
+    val downloadPolicy: DownloadPolicy,
+)
+
+/**
+ * Mirrors NewEpisodeCheckWorker's notification: diff segment counts before/after refresh.
+ * [waitsForWifi] = "Download over Wi-Fi only" is on and this isn't Wi-Fi, so a new episode
+ * isn't promised as ready.
+ */
+private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<PodcastDay>, waitsForWifi: Boolean) {
     var newEpisodeFound = false
     var newSegmentsFound = false
     var totalNewSegments = 0
@@ -188,7 +217,9 @@ private fun notifyIfNewContent(daysBefore: Map<String, Int>, daysAfter: List<Pod
 
     val title = if (newEpisodeFound) "New A&G Episode Available" else "New A&G Segments Available"
     val plural = if (totalNewSegments != 1) "s" else ""
-    val body = if (newEpisodeFound) {
+    val body = if (newEpisodeFound && waitsForWifi) {
+        "Today's show is out — it'll download when you're on Wi-Fi"
+    } else if (newEpisodeFound) {
         "Today's show is ready — $totalNewSegments segment$plural available"
     } else {
         "$totalNewSegments new segment$plural added to today's show"
