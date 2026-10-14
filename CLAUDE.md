@@ -158,7 +158,15 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
   is set in the env; local release builds are unsigned.
 - `.github/workflows/android-release.yml` (tag `v*` or manual dispatch): runs the
   shared engine test suite on macOS, then builds a signed AAB + APK on ubuntu.
-  `versionCode`/`versionName` accept `-P` overrides / dispatch inputs.
+  `versionCode`/`versionName` accept `-P` overrides / dispatch inputs. On a manual
+  dispatch it also **uploads to Google Play** (`playTrack`: production/internal/none,
+  `playStatus`: draft/completed; default production + **draft**, so a person still sends it
+  for review in Play Console → Publishing overview) with the R8 mapping file and release
+  notes from `Native Mobile/Android/whatsnew/whatsnew-en-US` (≤500 chars — update it every
+  release). Needs the `PLAY_SERVICE_ACCOUNT_JSON` secret (service account in GCP project
+  `armstrong-and-getty-app-d67a4`, invited in Play Console → Users and permissions); without
+  it the step logs a warning and skips. Bump the versionCode default in
+  `Android/build.gradle.kts` for each release (Play rejects a reused code).
 - `.github/workflows/ios-release.yml` is a dispatch-only scaffold that fails fast
   until the Apple signing secrets listed in its header are configured.
 
