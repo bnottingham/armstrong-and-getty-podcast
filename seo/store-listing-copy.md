@@ -19,6 +19,11 @@ is the "·" separator on the feature-graphic artwork. Evidence files live under
 >   release settings unchanged) and resubmitted; status Waiting for Review.
 >   The pre-change fields are recorded in
 >   `tools/seo/data/2026-10-13/asc-1.0.2-before.json`.
+> - **PLAY SUBMITTED 2026-10-13, ~9:35 PM PT:** short description, full
+>   description (2,814 chars) and the phone, 7-inch and 10-inch tablet
+>   screenshot sets (06 and 08 re-captioned; order 01,03,04,05,06,07,08) sent
+>   for review from Play Console (managed publishing off). AI asset
+>   declaration: "Don't label assets" (real captures, script-rendered frames).
 > - **Approved (Brett, 2026-10-13):** the recommended App Store package in the
 >   §0 paste sheet as written: Alt A subtitle, the recommended keyword string,
 >   News primary / Entertainment secondary, the recommended promotional text
