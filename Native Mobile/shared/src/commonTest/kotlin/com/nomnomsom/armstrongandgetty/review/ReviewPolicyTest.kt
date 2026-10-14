@@ -3,7 +3,10 @@ package com.nomnomsom.armstrongandgetty.review
 import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.COOLDOWN_MS
 import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.CRASH_QUIET_MS
 import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.DAY_MS
+import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.FAILURE_QUIET_MS
+import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.MIN_FOREGROUND_MS
 import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.MIN_INSTALL_AGE_MS
+import com.nomnomsom.armstrongandgetty.review.ReviewPolicy.UNAVAILABLE_RETRY_MS
 import com.nomnomsom.armstrongandgetty.util.formatAsDayKey
 import kotlinx.datetime.FixedOffsetTimeZone
 import kotlinx.datetime.LocalDateTime
@@ -38,10 +41,15 @@ class ReviewPolicyTest {
         autoPromptEnabled = true,
         screen = ReviewScreen.EPISODES,
         isResumed = true,
+        isWindowFocused = true,
+        canPresent = true,
+        isBusy = false,
+        foregroundForMs = 5 * 60_000L,
         isPlaying = false,
+        intendsToPlay = false,
         hasActiveDay = true,
         isCasting = false,
-        sessionHadFailure = false,
+        lastFailureMs = null,
         requestedThisProcess = false,
         hasLauncher = true,
     )
@@ -76,6 +84,14 @@ class ReviewPolicyTest {
     fun notForeground() = assertEquals(skip(SkipReason.NOT_FOREGROUND), eval(ctx = eligibleContext().copy(isResumed = false)))
 
     @Test
+    fun noWindowFocus() =
+        assertEquals(skip(SkipReason.NO_WINDOW_FOCUS), eval(ctx = eligibleContext().copy(isWindowFocused = false)))
+
+    @Test
+    fun cannotPresent() =
+        assertEquals(skip(SkipReason.CANNOT_PRESENT), eval(ctx = eligibleContext().copy(canPresent = false)))
+
+    @Test
     fun notHomeScreen() {
         for (screen in listOf(ReviewScreen.PLAYER, ReviewScreen.ABOUT, ReviewScreen.OTHER)) {
             assertEquals(skip(SkipReason.NOT_HOME_SCREEN), eval(ctx = eligibleContext().copy(screen = screen)), "$screen")
@@ -83,7 +99,19 @@ class ReviewPolicyTest {
     }
 
     @Test
+    fun busy() = assertEquals(skip(SkipReason.BUSY), eval(ctx = eligibleContext().copy(isBusy = true)))
+
+    @Test
+    fun justOpened() =
+        assertEquals(skip(SkipReason.JUST_OPENED), eval(ctx = eligibleContext().copy(foregroundForMs = 0)))
+
+    @Test
     fun playing() = assertEquals(skip(SkipReason.PLAYING), eval(ctx = eligibleContext().copy(isPlaying = true)))
+
+    /** Audio held back by a call / focus loss / buffering: the listener still wants it. */
+    @Test
+    fun playbackHeldBackStillCountsAsPlaying() =
+        assertEquals(skip(SkipReason.PLAYING), eval(ctx = eligibleContext().copy(intendsToPlay = true)))
 
     @Test
     fun noActiveDay() = assertEquals(skip(SkipReason.NO_ACTIVE_DAY), eval(ctx = eligibleContext().copy(hasActiveDay = false)))
@@ -93,7 +121,7 @@ class ReviewPolicyTest {
 
     @Test
     fun sessionFailure() =
-        assertEquals(skip(SkipReason.SESSION_FAILURE), eval(ctx = eligibleContext().copy(sessionHadFailure = true)))
+        assertEquals(skip(SkipReason.SESSION_FAILURE), eval(ctx = eligibleContext().copy(lastFailureMs = now - 60_000)))
 
     @Test
     fun tooNew() =
@@ -120,6 +148,12 @@ class ReviewPolicyTest {
         assertEquals(skip(SkipReason.COOLDOWN), eval(state = eligibleState().copy(lastRequestMs = now - 10 * DAY_MS)))
 
     @Test
+    fun retryCooldown() = assertEquals(
+        skip(SkipReason.RETRY_COOLDOWN),
+        eval(state = eligibleState().copy(lastUnavailableMs = now - DAY_MS))
+    )
+
+    @Test
     fun todayNotQualified() = assertEquals(
         skip(SkipReason.TODAY_NOT_QUALIFIED),
         eval(state = eligibleState().copy(qualifyingDays = listOf("2026-10-09", "2026-10-10", "2026-10-11")))
@@ -133,8 +167,31 @@ class ReviewPolicyTest {
 
     @Test
     fun everySkipReasonHasATest() {
-        // 17 reasons, each covered above; fails if a reason is added without a gate test.
-        assertEquals(17, SkipReason.entries.size)
+        // 22 reasons, each covered above; fails if a reason is added without a gate test.
+        assertEquals(22, SkipReason.entries.size)
+    }
+
+    @Test
+    fun onlyEngagementAndHealthGatesAreReportedAsSkips() {
+        assertEquals(
+            setOf(
+                SkipReason.SESSION_FAILURE, SkipReason.TOO_NEW, SkipReason.RECENT_CRASH,
+                SkipReason.COOLDOWN, SkipReason.TODAY_NOT_QUALIFIED, SkipReason.NEEDS_LISTENING_DAYS,
+            ),
+            SkipReason.entries.filter { it.isEngagementGate }.toSet()
+        )
+    }
+
+    /** The coordinator only consults Cast when the answer can depend on it. */
+    @Test
+    fun interactionGatesComeBeforeCasting() {
+        val interaction = listOf(
+            SkipReason.DISABLED, SkipReason.ALREADY_THIS_PROCESS, SkipReason.NO_LAUNCHER,
+            SkipReason.NOT_FOREGROUND, SkipReason.NO_WINDOW_FOCUS, SkipReason.CANNOT_PRESENT,
+            SkipReason.NOT_HOME_SCREEN, SkipReason.BUSY, SkipReason.JUST_OPENED, SkipReason.PLAYING,
+            SkipReason.NO_ACTIVE_DAY,
+        )
+        assertEquals(interaction, SkipReason.entries.filter { it < SkipReason.CASTING })
     }
 
     // ---- clock edges (all inclusive) -----------------------------------------------------
@@ -165,6 +222,35 @@ class ReviewPolicyTest {
     }
 
     @Test
+    fun foregroundDwellBoundaryIsInclusive() {
+        assertEquals(ReviewDecision.Request, eval(ctx = eligibleContext().copy(foregroundForMs = MIN_FOREGROUND_MS)))
+        assertEquals(
+            skip(SkipReason.JUST_OPENED),
+            eval(ctx = eligibleContext().copy(foregroundForMs = MIN_FOREGROUND_MS - 1))
+        )
+    }
+
+    @Test
+    fun aSessionFailureOnlyHoldsForTheQuietPeriod() {
+        assertEquals(ReviewDecision.Request, eval(ctx = eligibleContext().copy(lastFailureMs = now - FAILURE_QUIET_MS)))
+        assertEquals(
+            skip(SkipReason.SESSION_FAILURE),
+            eval(ctx = eligibleContext().copy(lastFailureMs = now - FAILURE_QUIET_MS + 1))
+        )
+        // Clock moved back past the failure: still held (conservative).
+        assertEquals(skip(SkipReason.SESSION_FAILURE), eval(ctx = eligibleContext().copy(lastFailureMs = now + 1)))
+    }
+
+    @Test
+    fun unavailableRetryBoundaryIsInclusive() {
+        assertEquals(ReviewDecision.Request, eval(state = eligibleState().copy(lastUnavailableMs = now - UNAVAILABLE_RETRY_MS)))
+        assertEquals(
+            skip(SkipReason.RETRY_COOLDOWN),
+            eval(state = eligibleState().copy(lastUnavailableMs = now - UNAVAILABLE_RETRY_MS + 1))
+        )
+    }
+
+    @Test
     fun clockMovedBackwardsSkipsConservatively() {
         assertEquals(skip(SkipReason.CLOCK_SKEW), eval(state = eligibleState().copy(firstSeenMs = now + 1)))
         assertEquals(
@@ -172,6 +258,36 @@ class ReviewPolicyTest {
             eval(state = eligibleState().copy(lastRequestMs = now + 1, requestCount = 1, lastRequestVersion = "2.0.0"))
         )
         assertEquals(skip(SkipReason.CLOCK_SKEW), eval(state = eligibleState().copy(lastCrashMs = now + 1)))
+        assertEquals(skip(SkipReason.CLOCK_SKEW), eval(state = eligibleState().copy(lastUnavailableMs = now + 1)))
+    }
+
+    @Test
+    fun futureStampsAreClampedToNow() {
+        val skewed = eligibleState().copy(
+            firstSeenMs = now + 400 * DAY_MS,
+            lastRequestMs = now + 1,
+            lastCrashMs = now + DAY_MS,
+            lastUnavailableMs = now + 2 * DAY_MS,
+            requestCount = 1,
+            lastRequestVersion = "2.0.0",
+        )
+        val clamped = ReviewPolicy.clampFutureTimestamps(skewed, now)
+        assertEquals(now, clamped.firstSeenMs)
+        assertEquals(now, clamped.lastRequestMs)
+        assertEquals(now, clamped.lastCrashMs)
+        assertEquals(now, clamped.lastUnavailableMs)
+        // Each wait restarts from now instead of blocking until real time passes the stamp.
+        assertEquals(skip(SkipReason.TOO_NEW), eval(state = clamped))
+        assertEquals(
+            ReviewDecision.Request,
+            ReviewPolicy.evaluate(clamped, eligibleContext().copy(nowMs = now + COOLDOWN_MS))
+        )
+    }
+
+    @Test
+    fun pastStampsAreLeftAlone() {
+        val state = eligibleState().copy(lastRequestMs = now - DAY_MS, lastCrashMs = null)
+        assertSame(state, ReviewPolicy.clampFutureTimestamps(state, now))
     }
 
     @Test

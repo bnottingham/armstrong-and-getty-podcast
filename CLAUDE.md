@@ -102,22 +102,39 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
   About "Rate the App" row only deep-links to the store (`StoreLinks`). Analytics say
   `in_app_review_requested`, never "shown"/"rated": neither store reports either.
 - **Only `ReviewCoordinator` asks**, only from `App()` composition (via `ReviewPromptHost`),
-  only at a natural pause on the Episodes list (`LEFT_PLAYER`, `PAUSED_ON_LIST`), after a
-  2 s settle that re-checks every gate live. Never call it from `PlaybackService`, Android
-  Auto, `NewEpisodeCheckWorker`, the iOS BG task, or at launch/resume. Its Koin
-  definitions stay lazy `single`s (no `createdAtStart`) — see the iOS Koin startup race
-  (`EnsureKoin.kt`).
+  and only at the END of a listen the listener made in this foreground visit, with the
+  Episodes list on screen: `LEFT_PLAYER` (back from the player after pausing or finishing
+  that day during this player visit) or `FINISHED_ON_LIST` (the day played to its natural
+  end on the list). **Never on a pause tap** (Apple: not "in response to a button tap or
+  other user action"), never for a stop made from the lock screen / notification / Auto,
+  for audio held back by a call or another app (`PlaybackState.playWhenReady` stays true),
+  or for a switch to another day. A 2 s settle then re-checks every gate live. Never call
+  it from `PlaybackService`, Android Auto, `NewEpisodeCheckWorker`, the iOS BG task, or
+  within 30 s of the app coming to the foreground. Its Koin definitions stay lazy
+  `single`s (no `createdAtStart`) — see the iOS Koin startup race (`EnsureKoin.kt`).
 - **Gates** live in `ReviewPolicy` (pure, exhaustively tested): ≥3 distinct device-local
-  days with ≥10 min credited listening, ≥5 days since first seen, 120-day cooldown, one
-  per app version, lifetime cap 3, 7 days quiet after a crash, never while playing,
-  casting, or after a visible failure this process. Its day key is **device-local**, not
-  the engine's UTC key — don't unify them.
+  days with ≥10 min credited listening (today one of them), ≥5 days since first seen,
+  120-day cooldown, one per app version, lifetime cap 3, 7 days quiet after a crash; never
+  while playing or held back, casting, without window focus (shade, dialog window), while
+  a dialog / refresh / "Download failed" row / failed segment is on screen
+  (`HoldReviewPromptWhile`, `EpisodeListViewModel.reviewBlocker`), or within 30 min of a
+  feed/download failure not yet followed by a success (`SessionHealth`). Its day key is
+  **device-local**, not the engine's UTC key — don't unify them.
+- **Attempts:** persisted and read back BEFORE the platform call (a broken store never
+  asks). `canPresent()` is checked before anything is spent. A result of `context_gone`
+  is given back; `unavailable` is given back with a 14-day retry gap; never a second ask
+  in one process. Analytics: `in_app_review_requested` (with `result`), plus once per
+  process `in_app_review_skipped` (engagement gates) and, with the switch off,
+  `in_app_review_would_request`.
 - **Storage is new-keys-only:** Android prefs file `in_app_review`, iOS NSUserDefaults keys
   prefixed `in_app_review.`. Never reuse `user_deletions` / Room / `podcasts/`
   (`ReviewStateStoreTest` enforces it).
 - **Android auto-prompt is OFF** (`ANDROID_AUTO_PROMPT_ENABLED` in
   `androidMain/.../review/AndroidReviewEnvironment.kt`) until a Wi-Fi-only download
-  setting ships (`seo/strategy.md` §4.4). Listening days still accumulate meanwhile.
+  setting ships (`seo/strategy.md` §4.4). Meanwhile every moment is a dry run (nothing is
+  spent or shown). Listening days accumulate only while the phone UI is running: an
+  Android Auto-only session earns none until `PlaybackService` also feeds the tracker —
+  do that before flipping the switch (see the checklist on the constant).
 - **Verify:** `./gradlew :shared:iosSimulatorArm64Test`; logcat / Xcode console tag
   `InAppReview` prints `skip <moment>: <reason>` or `requested …`. The iOS sheet never
   appears in TestFlight (development builds only); the Play card only on a Play-installed

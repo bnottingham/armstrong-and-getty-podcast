@@ -21,6 +21,7 @@ object ReviewKeys {
     const val REQUEST_COUNT = "in_app_review.request_count"
     const val LAST_REQUEST_VERSION = "in_app_review.last_request_version"
     const val LAST_CRASH_MS = "in_app_review.last_crash_ms"
+    const val LAST_UNAVAILABLE_MS = "in_app_review.last_unavailable_ms"
 
     val all: List<String> = listOf(
         FIRST_SEEN_MS,
@@ -31,5 +32,6 @@ object ReviewKeys {
         REQUEST_COUNT,
         LAST_REQUEST_VERSION,
         LAST_CRASH_MS,
+        LAST_UNAVAILABLE_MS,
     )
 }

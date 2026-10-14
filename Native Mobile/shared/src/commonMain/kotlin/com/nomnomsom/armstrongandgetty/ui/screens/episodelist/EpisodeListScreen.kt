@@ -56,6 +56,7 @@ import com.nomnomsom.armstrongandgetty.data.model.displayLabel
 import com.nomnomsom.armstrongandgetty.data.model.effectiveDurationMs
 import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
+import com.nomnomsom.armstrongandgetty.review.HoldReviewPromptWhile
 import com.nomnomsom.armstrongandgetty.ui.theme.ErrorRed
 import com.nomnomsom.armstrongandgetty.ui.theme.Gold
 import com.nomnomsom.armstrongandgetty.ui.theme.GoldDark
@@ -476,6 +477,8 @@ private fun EpisodeDayCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
+        // On iOS a Compose dialog shares the window, so window focus alone wouldn't see it.
+        HoldReviewPromptWhile(true)
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Episode") },

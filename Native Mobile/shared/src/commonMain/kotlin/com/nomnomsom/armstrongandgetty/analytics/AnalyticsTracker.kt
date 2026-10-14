@@ -41,8 +41,17 @@ object AnalyticsEvents {
     const val BACKGROUND_REFRESH = "background_refresh"
     const val ABOUT_LINK_OPEN = "about_link_open"
 
-    /** The app asked the platform for its review flow. Never means "shown" or "rated". */
+    /**
+     * The app asked the platform for its review flow. Never means "shown" or "rated".
+     * `result` = called | context_gone | unavailable (the last two are given back).
+     */
     const val IN_APP_REVIEW_REQUESTED = "in_app_review_requested"
+
+    /** At most once per process: a good moment, but an engagement / health gate said not yet. */
+    const val IN_APP_REVIEW_SKIPPED = "in_app_review_skipped"
+
+    /** At most once per process, auto-prompt switched off (Android): the policy would have asked. */
+    const val IN_APP_REVIEW_WOULD_REQUEST = "in_app_review_would_request"
 
     // Params
     const val PARAM_DATE = "episode_date"

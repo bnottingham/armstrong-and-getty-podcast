@@ -81,7 +81,8 @@ fun App() {
         }
 
         // In-app rating prompt: outside NavHost so it sees the Activity / root VC lifecycle.
-        ReviewPromptHost(currentRoute)
+        val reviewBlocked by episodeListViewModel.reviewBlocker.collectAsState()
+        ReviewPromptHost(currentRoute, blocked = reviewBlocked)
 
         val isPlayerRoute = currentRoute?.startsWith("player/") == true
         val isTopLevelRoute = currentRoute == "episodes" || currentRoute == "about"

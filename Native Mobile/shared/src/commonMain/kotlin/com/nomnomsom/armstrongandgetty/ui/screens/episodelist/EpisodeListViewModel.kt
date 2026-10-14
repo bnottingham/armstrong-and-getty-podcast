@@ -19,8 +19,11 @@ import com.nomnomsom.armstrongandgetty.util.AppLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.FileSystem
@@ -52,6 +55,19 @@ internal fun shouldMarkListened(
     return nearEnd && dayIsComplete && loadedSegmentCount >= daySegmentCount
 }
 
+/**
+ * Whether the Episodes list is showing something the listener has to deal with, so the
+ * in-app rating prompt waits: a pull-to-refresh in progress, a "Download failed" row
+ * (persisted, so possibly from an earlier run), or segments that failed on this pass.
+ */
+internal fun hasVisibleReviewBlocker(
+    state: EpisodeListUiState,
+    downloadProgress: Map<String, DownloadProgress>
+): Boolean =
+    state.isRefreshing ||
+        state.days.any { it.state == DownloadState.ERROR } ||
+        downloadProgress.values.any { it.segmentsFailed.isNotEmpty() }
+
 private data class PlayableSegment(
     val originalIndex: Int,
     val segment: Segment,
@@ -62,7 +78,7 @@ class EpisodeListViewModel(
     private val repository: PodcastRepository,
     val playbackController: PlaybackController,
     private val analytics: AnalyticsTracker,
-    // Visible failures suppress the in-app rating prompt for the rest of this process.
+    // Feed / download failures hold the in-app rating prompt until a success (or 30 min).
     private val sessionHealth: SessionHealth
 ) : ViewModel() {
 
@@ -79,6 +95,11 @@ class EpisodeListViewModel(
 
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
+
+    /** [hasVisibleReviewBlocker], live; changes only when the answer does. */
+    val reviewBlocker: StateFlow<Boolean> =
+        combine(_uiState, _downloadProgress, ::hasVisibleReviewBlocker)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // One Job per in-flight day download so the user can cancel from the UI.
     private val downloadJobs = mutableMapOf<String, Job>()
@@ -104,6 +125,7 @@ class EpisodeListViewModel(
             _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
             val result = repository.refreshFeed()
             if (result.isSuccess) {
+                sessionHealth.reportSuccess("feed_refresh")
                 val latestDate = result.getOrThrow()
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
 
@@ -171,6 +193,7 @@ class EpisodeListViewModel(
                 _downloadProgress.value = _downloadProgress.value + (date to progress)
             }
             if (result.isSuccess) {
+                sessionHealth.reportSuccess("download")
                 analytics.logEvent(AnalyticsEvents.DOWNLOAD_COMPLETED, mapOf(AnalyticsEvents.PARAM_DATE to date))
             } else {
                 sessionHealth.reportFailure("download")
@@ -207,6 +230,7 @@ class EpisodeListViewModel(
                 sessionHealth.reportFailure("segment_retry")
                 AppLog.w(TAG, "Segment $index retry failed for $date: ${result.exceptionOrNull()?.message}")
             } else {
+                sessionHealth.reportSuccess("segment_retry")
                 repository.getDayByDate(date)?.let { appendPlayableSegmentsToCurrentPlaylist(it) }
             }
             // Clear in-flight state for this retry; the row will refresh from disk check.

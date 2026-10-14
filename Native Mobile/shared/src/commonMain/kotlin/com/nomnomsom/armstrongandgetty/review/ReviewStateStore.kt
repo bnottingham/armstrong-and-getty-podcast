@@ -18,6 +18,7 @@ class ReviewStateStore(private val settings: Settings) {
         requestCount = read { settings.getIntOrNull(ReviewKeys.REQUEST_COUNT) }?.coerceAtLeast(0) ?: 0,
         lastRequestVersion = read { settings.getStringOrNull(ReviewKeys.LAST_REQUEST_VERSION) },
         lastCrashMs = read { settings.getLongOrNull(ReviewKeys.LAST_CRASH_MS) },
+        lastUnavailableMs = read { settings.getLongOrNull(ReviewKeys.LAST_UNAVAILABLE_MS) },
     )
 
     fun save(state: ReviewState) {
@@ -32,6 +33,7 @@ class ReviewStateStore(private val settings: Settings) {
         settings.putInt(ReviewKeys.REQUEST_COUNT, state.requestCount)
         putString(ReviewKeys.LAST_REQUEST_VERSION, state.lastRequestVersion)
         putLong(ReviewKeys.LAST_CRASH_MS, state.lastCrashMs)
+        putLong(ReviewKeys.LAST_UNAVAILABLE_MS, state.lastUnavailableMs)
     }
 
     private fun putLong(key: String, value: Long?) {

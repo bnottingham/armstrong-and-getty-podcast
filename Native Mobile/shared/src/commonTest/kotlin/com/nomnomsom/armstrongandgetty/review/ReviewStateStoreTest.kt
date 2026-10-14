@@ -18,6 +18,7 @@ class ReviewStateStoreTest {
         requestCount = 2,
         lastRequestVersion = "2.1.0",
         lastCrashMs = 1_759_500_000_000,
+        lastUnavailableMs = 1_759_700_000_000,
     )
 
     @Test
@@ -25,6 +26,14 @@ class ReviewStateStoreTest {
         val store = ReviewStateStore(MapSettings())
         store.save(full)
         assertEquals(full, store.load())
+    }
+
+    /** Every ReviewState field is persisted (a field without a key would silently reset). */
+    @Test
+    fun everyKeyIsWrittenForAFullState() {
+        val settings = MapSettings()
+        ReviewStateStore(settings).save(full)
+        assertEquals(ReviewKeys.all.toSet(), settings.keys)
     }
 
     @Test
@@ -73,6 +82,7 @@ class ReviewStateStoreTest {
         assertFalse(settings.hasKey(ReviewKeys.LAST_REQUEST_MS))
         assertFalse(settings.hasKey(ReviewKeys.LAST_REQUEST_VERSION))
         assertFalse(settings.hasKey(ReviewKeys.LAST_CRASH_MS))
+        assertFalse(settings.hasKey(ReviewKeys.LAST_UNAVAILABLE_MS))
         assertEquals(ReviewState(firstSeenMs = full.firstSeenMs), store.load())
     }
 
