@@ -139,8 +139,9 @@ fun AboutScreen() {
             )
         }
 
-        SectionHeader("APP DEVELOPER")
+        SectionHeader("THIS APP")
         // Store deep link only — never the in-app review API (see CLAUDE.md "In-app review").
+        // Keep the subtitle neutral: no "Enjoying the app?" sentiment question.
         LinkRow(AppIcons.Star, "Rate the App", "Leave a rating on ${StoreLinks.storeName}") {
             openFirst("rate_app", StoreLinks.rateAppUrls)
         }
