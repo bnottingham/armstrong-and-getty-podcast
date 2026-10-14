@@ -317,6 +317,12 @@ This is an independent, fan-built companion app. It is not affiliated with, endo
 Google Cast and Chromecast are trademarks of Google LLC.
 ```
 
+> **Next listing update (once the build with the Wi-Fi setting is live):** replace
+> the third "GOOD TO KNOW" bullet with the line below (the description becomes
+> 2,498/4000). The setting is opt-in and off by default, so the current bullet
+> stays accurate until then.
+> `- New show days download automatically over Wi-Fi or cellular data. To keep downloads on Wi-Fi only, turn on "Download over Wi-Fi only" on the About tab. Delete old days now and then to save space.`
+
 Alternate opening line (174 chars). Use it in place
 of the first paragraph if Brett prefers a question-led hook; the rest stays
 the same:
@@ -355,6 +361,10 @@ Missed the show this morning? This unofficial, fan-built app puts every hour of 
 - **Honest data note.** New days auto-download in background refresh
   (`BackgroundRefresh.kt:31-34`), and no Wi-Fi-only restriction exists
   anywhere in the shared code (grep for cellular or wifi found nothing).
+  Update: branch `feature/wifi-only-and-rebrand` adds an opt-in "Download over
+  Wi-Fi only" setting (default off). Default behaviour is unchanged, so the
+  cellular wording stays accurate; add the opt-in sentence at the next listing
+  update (note below the block).
 - **Every claim was checked in code:**
   - 10/30 s skips: `PlayerScreen.kt:338-383`.
   - Lock Screen and Control Center: `AvPlatformPlayer.kt:48-49`,
@@ -451,8 +461,12 @@ Alt A). None of this touches the quote captions or slides 02 and 09.
 
 **App side (next build, agent work with Brett's OK):** the in-app header
 renders the same "PODCAST · ON DEMAND" lockup in every capture
-(`App.kt:124`). Change it to "UNOFFICIAL PODCAST APP" alongside the About-card
-rewrite (`AboutScreen.kt:177-185`).
+(`App.kt:129` on `f064684`). Change it to "UNOFFICIAL PODCAST APP" alongside the
+About-card rewrite (`AboutScreen.kt` `HeroCard`, tagline and bio at :191-203 on
+`f064684`). Done on branch `feature/wifi-only-and-rebrand` (not shipped): the
+header reads "UNOFFICIAL PODCAST APP" (`App.kt:134`), and the About card's
+tagline and bio are replaced (`AboutScreen.kt` `HeroCard`). The hero template
+is updated in `buildPromoScreenshots.mjs`; recapture is still pending.
 
 ---
 
@@ -581,6 +595,12 @@ This is an independent, fan-built companion app for listeners of The Armstrong &
 Google Cast, Chromecast, and Android Auto are trademarks of Google LLC.
 ```
 
+> **Next listing update (once the build with the Wi-Fi setting is live):** replace
+> the third "Good to know" bullet with the line below (the description becomes
+> 2,883/4000). The setting is opt-in and off by default, so the current bullet
+> stays accurate until then.
+> `- New hours download automatically over Wi-Fi or mobile data. To keep downloads on Wi-Fi only, turn on "Download over Wi-Fi only" on the About tab. Delete old days now and then to save space.`
+
 **Alternate** (if Brett doesn't confirm Android Auto, §5): delete the
 "Android Auto" heading and its line, and change the trademark line to
 "Google Cast and Chromecast are trademarks of Google LLC."
@@ -618,16 +638,18 @@ Google Cast, Chromecast, and Android Auto are trademarks of Google LLC.
   - Android Auto browse of recent days: `PlaybackService.kt:403-461`.
   - Background check, auto-download and notification:
     `NewEpisodeCheckWorker.kt:83-115`.
-  - Any-network downloads: `AGPodcastApp.kt:58-59`, `NetworkType.CONNECTED`.
+  - Any-network downloads by default: `AGPodcastApp.kt:58-59`
+    (`NetworkType.CONNECTED`); the opt-in Wi-Fi-only gate is `DownloadPolicy`
+    (`DownloadSettings`, default off).
   - About links (Hot Links, One More Thing, Extra Large Interviews, Select
     Cuts): `AboutScreen.kt:94-130`.
 - **What it does not claim:** no "next segment" button (none exists, §1.6),
   no CarPlay, no sleep timer.
 - **"Google Cast-enabled" wording and the trademark line** follow Google's
   Cast branding rules (policy lens).
-- **Once a Wi-Fi-only setting ships**, change the third "Good to know" bullet
-  to: "New hours download automatically; choose Wi-Fi only in Settings to
-  save mobile data."
+- **Once the Wi-Fi-only setting ships**, use the replacement bullet in the
+  note under the description block. The default stays Wi-Fi + mobile data,
+  and the setting is on the About tab (there is no Settings screen).
 
 ### 2.4 Screenshots and feature graphic
 

@@ -280,7 +280,7 @@ text and the 06/08 re-captions (`owner-actions.md` #6).
 | P1 | On-device search check before the 1.0.2 resubmission and about 7 days after 1.0.2 is live (term list in `owner-actions.md` #6e) | DataForSEO "&" data is invalid, and no tool sees the Ads slot | B |
 | P1 | Hero slide fix, both stores: "Unofficial fan-made podcast app" kicker, no laurels, show name as a small subline, recapture on a title with no superlative (`store-listing-copy.md` §1.8a). App Store at the 1.0.2 resubmission if ready, otherwise the next version | The hero has laurels, a "PODCAST · ON DEMAND" lockup that echoes the official feed, and no unofficial marker | A + B |
 | P2 | Primary category decision (News vs Entertainment) | Weak evidence either way (open question 4) | B |
-| P2 (next build) | Set `CFBundleDisplayName` (e.g. "A&G Podcast"); rewrite the About screen's tagline and bio (`AboutScreen.kt:177-185`); change the header kicker "PODCAST · ON DEMAND" (`App.kt:124`) to "UNOFFICIAL PODCAST APP" | Likely shows the lowercase target name "armstrongandgetty" on the home screen (no display name in `Info.plist`/pbxproj). The About screen reproduces official copy, and the header lockup appears in every capture | A |
+| P2 (next build) | Set `CFBundleDisplayName` (e.g. "A&G Podcast"); rewrite the About screen's tagline and bio (`AboutScreen.kt` `HeroCard`) — **done on branch** `feature/wifi-only-and-rebrand`; change the header kicker "PODCAST · ON DEMAND" (`App.kt:129` on `f064684`) to "UNOFFICIAL PODCAST APP" — **done on branch** (not shipped). `CFBundleDisplayName` is still open | Likely shows the lowercase target name "armstrongandgetty" on the home screen (no display name in `Info.plist`/pbxproj). The About screen reproduces official copy, and the header lockup appears in every capture | A |
 | P3 | Custom product pages (e.g. "Cast & AirPlay") and in-app events, only once ratings and traffic exist; events only for real launches | Too little traffic to test; Apple says daily activities aren't events | B |
 
 ### 4.3 Google Play (listing edits need no app release)
@@ -303,7 +303,7 @@ text and the 06/08 re-captions (`owner-actions.md` #6).
 | Pri | Action | Why | Who |
 |---|---|---|---|
 | P1 decision / P2 build | Native review prompts in the release **after** 1.0.2: `AppStore.requestReview` and the Play In-App Review API. Gate on ≥3 distinct listening days with ≥10–15 min each and ≥5 days since install; never after a crash or a feed or download failure; foreground only at a natural pause; never at launch, mid-playback, while casting or on Auto; 120-day cooldown, lifetime cap 3; no "do you like it?" pre-question; never triggered from a button; no incentives. Plus a "Rate the app" About row (deep link only). Reuse `renew/docs/in-app-reviews.md` | 0 ratings next to iHeart (650,272) and Apple Podcasts (2,074,722) on our own #1 results. Peers have 8–145 ratings, so a goal of **30–50 per store** matches Bob and Sheri (32) and Walton and Johnson (51). Apple names ratings as a ranking input | A (B decides) |
-| P2 | Android prerequisite: a Wi-Fi-only download setting (default on), then prompts | New hours download on any network today. Prompting first invites "ate my data" reviews | A |
+| P2 | Android prerequisite: a Wi-Fi-only download setting (opt-in, default off; owner decision 2026-10-14; built on `feature/wifi-only-and-rebrand`), then prompts | New hours download on any network today. Prompting first invites "ate my data" reviews | A |
 | ongoing | Reply to every review, factually; point "doesn't play live" complaints to how-to-listen | Trust signal on a 0-rating listing | B |
 
 ### 4.5 Authority (links and mentions)
@@ -490,3 +490,4 @@ Console, not this table):
 10. **iOS territories.** Google shows the JP and RU App Store pages for "armstrong and getty app".
     Is worldwide availability intended for a US talk show?
 11. **Android data use.** Ship the Wi-Fi-only download setting before review prompts on Android?
+    Answered 2026-10-14: opt-in setting, default off.

@@ -131,8 +131,9 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
   (`ReviewStateStoreTest` enforces it).
 - **Android auto-prompt is ON** (`ANDROID_AUTO_PROMPT_ENABLED` in
   `androidMain/.../review/AndroidReviewEnvironment.kt`, flipped 2026-10-14 by Brett's call;
-  `false` makes every moment a logged dry run). New hours still download on any network,
-  so a Wi-Fi-only download setting is the next ratings-safety item. Listening days
+  `false` makes every moment a logged dry run). Downloads use Wi-Fi and mobile data by
+  default; listeners can restrict them with the About tab's "Download over Wi-Fi only"
+  setting (off by default — see below). Listening days
   accumulate only while the phone UI is running: Android Auto-only listening earns none
   until `PlaybackService` also feeds the tracker (an undercount, never an over-ask).
 - **Verify:** `./gradlew :shared:iosSimulatorArm64Test`; logcat / Xcode console tag
@@ -145,6 +146,40 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
   then `xcrun simctl spawn <udid> defaults write "$P" in_app_review.first_seen_ms -int <ms>`.
   Android: `adb shell run-as com.nomnomsom.armstrongandgetty cat shared_prefs/in_app_review.xml`.
   A generic-simulator `xcodebuild` needs `ARCHS=arm64` (there is no iosX64 target).
+
+## Wi-Fi-only downloads (setting)
+
+Code: `shared/.../download/` (`DownloadSettings`, `DownloadPolicy`, `NetworkStatus` + platform
+actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/` and `WifiGateTest`.
+
+- **Default OFF for everyone** (absent key = off; no migration). Off = the old behaviour
+  exactly: every download uses Wi-Fi or mobile data and `DownloadPolicy` never consults the
+  network. Don't change the default without an owner decision.
+- **On = unmetered only** (Android `NET_CAPABILITY_NOT_METERED`; iOS path satisfied and not
+  `isExpensive`). Metered, offline and unknown all block. It governs every transfer
+  `AudioDownloader` makes: app-open/pull-to-refresh auto-download, the player's live poll,
+  `NewEpisodeCheckWorker`, the iOS BG task, and manual Download/Retry taps. Enforced in
+  `PodcastRepository` (`downloadDay`, `appendNewSegments`, `retrySegment`) before any state
+  change, plus a per-attempt/watchdog backstop in `AudioDownloader`; the iOS audio-only Darwin
+  client sets `allowsExpensiveNetworkAccess = false` per request while on.
+- **Never gated:** feed refresh, notifications, playback (incl. Android Auto's remote-URL
+  streaming), Cast and AirPlay. Keep `RssFeedParser` on the unqualified HttpClient.
+- **Blocked ≠ failed:** `WifiRequiredException` leaves the day `NONE` (never `ERROR`), never
+  enters `segmentsFailed`, and skips `SessionHealth.reportFailure`, `download_failed` and
+  Crashlytics — so it never holds the review prompt.
+- **Manual tap while blocked:** `EpisodeListViewModel.wifiRequiredPrompt` → `WifiRequiredDialog`
+  in `App()` ("Turn Off & Download" / "Not Now"; holds the review prompt). No per-tap queue.
+- **Catch-up (setting on):** worker and BG task plan via `planAutoDownloads(catchUp = true)`
+  (also today's/latest day left `NONE`); the VM reruns its auto-download pass when
+  `allowedFlow` goes false→true. A deferring Android run enqueues one-time unique work
+  `new_episode_check_wifi` (UNMETERED). The periodic `new_episode_check` stays `CONNECTED` +
+  `KEEP` — never re-enqueue it for this setting.
+- **Storage is new-keys-only:** Android prefs file `download_settings`, key
+  `download_settings.wifi_only` (iOS: standard NSUserDefaults, same key). `DownloadSettingsTest`
+  enforces default-off and no reuse of `user_deletions`/`dates`/`user_deletions_dates`/`in_app_review.*`.
+- New Koin definitions are lazy `single`s; the iOS BG task resolves them inside its try/catch.
+- **Testing:** an Android emulator with Wi-Fi off is metered mobile data. iOS simulators report
+  the Mac's network (never expensive) — cellular behaviour needs a physical iPhone.
 
 ## Release CI & signing
 

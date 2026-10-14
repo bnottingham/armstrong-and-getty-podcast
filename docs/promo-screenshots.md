@@ -38,6 +38,26 @@ onto the existing output PNG; the real app capture below is untouched. Checked
 on an unchanged slide: the result was pixel-identical to the original (max
 channel delta 1). Feature slides only; use `--only` one slide id at a time.
 
+**Verifying template changes without captures.** To eyeball a layout change
+(e.g. the hero) when no raw batch is on disk, render from a temporary copy so
+nothing under the repo's `screenshots/` is touched:
+
+```bash
+T=$(mktemp -d)/promo; mkdir -p "$T/tools/promo-screenshots"
+cp tools/promo-screenshots/buildPromoScreenshots.mjs "$T/tools/promo-screenshots/"
+ln -s "$PWD/tools/promo-screenshots/node_modules" "$T/tools/promo-screenshots/node_modules"
+cp -R tools/promo-screenshots/.cache "$T/tools/promo-screenshots/"   # inlined fonts
+# Placeholders: all six capture names in $T/screenshots/ag-verify/{ios/iphone-6.9,
+# ios/ipad-13,android/phone,android/tablet}/, each at that profile's capture size
+# (1320x2868, 2064x2752, 1080x1920, 1440x2560), e.g. docs/assets/img/screens/library.png
+# resized with sharp (fit: cover, position: top).
+(cd "$T" && node tools/promo-screenshots/buildPromoScreenshots.mjs --batch=ag-verify --only=01)
+```
+
+`--only` skips pruning and the contact sheets; the PNGs land under
+`$T/screenshots/{app-store,play-store}/`. Edge is used when Chrome is absent.
+Afterwards `git status` must show only the template change.
+
 **Captions are real review excerpts.** Each `quote` must be a verbatim excerpt
 of a real supplied review (the full pool is in the pre-`d2844c8` version of the
 builder). To change what a caption says, pick a different verbatim excerpt —
@@ -118,7 +138,7 @@ Re-measure it if the emulator density changes.
 
 | # | File | Slot |
 |---|------|------|
-| 1 | `01-hero.png` | Fly-in hero — wordmark, laurel-framed line, tilted device |
+| 1 | `01-hero.png` | Fly-in hero — "Unofficial fan-made podcast app" kicker, headline, "For Armstrong & Getty listeners" subline, tilted device |
 | 2 | `03-episodes.png` | Episode list |
 | 3 | `04-player.png` | Player and skip controls |
 | 4 | `05-downloads.png` | Offline downloads |
@@ -150,7 +170,7 @@ Palette comes from the app's own Compose theme
 gold, `#F0EDE6` text.
 
 Type is **Playfair Display** for headlines and quotations and **Inter** for the
-uppercase hero kicker. The app itself declares no
+uppercase hero kicker and the hero subline. The app itself declares no
 custom typeface (Compose renders SF on iOS, Roboto on Android), so the promo
 face is a deliberate marketing choice: a high-contrast news serif that suits a
 talk-radio show and gives the set the same editorial weight as the sibling
@@ -178,7 +198,11 @@ falling back to a system face and reflowing the art-directed line breaks.
   own header does. Do not add official-sounding endorsement copy, and consider
   carrying the disclaimer in the listing description — Apple 4.1 and Play's
   impersonation policy both look at whether promotional art implies an
-  affiliation that does not exist.
+  affiliation that does not exist. The hero leads with the kicker "Unofficial
+  fan-made podcast app"; the show's name appears only in the smaller "For
+  Armstrong & Getty listeners" subline. There is no large serif wordmark and no
+  laurel wreath; both read as official show branding or accolades. The app
+  header reads "UNOFFICIAL PODCAST APP".
 
 ## Content bugs fixed in this batch
 
