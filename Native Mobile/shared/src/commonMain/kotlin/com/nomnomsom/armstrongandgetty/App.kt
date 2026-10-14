@@ -129,8 +129,9 @@ fun App() {
                                         "Armstrong & Getty",
                                         style = MaterialTheme.typography.titleLarge.copy(fontSize = 17.sp)
                                     )
+                                    // Unofficial app: never mirror the official feed name here.
                                     Text(
-                                        "PODCAST · ON DEMAND",
+                                        "UNOFFICIAL PODCAST APP",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontSize = 9.sp,
                                             letterSpacing = 1.4.sp

@@ -215,16 +215,17 @@ private fun HeroCard() {
                 letterSpacing = 2.sp
             )
             Spacer(Modifier.height(6.dp))
+            // Our own neutral wording — never the show's official tagline or bio (unofficial app).
             Text(
-                "SMART. FUNNY. INDEPENDENT PERSPECTIVE.",
+                "UNOFFICIAL FAN-MADE APP",
                 style = MaterialTheme.typography.labelSmall,
                 color = Gold
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                "Jack Armstrong and Joe Getty take an independent, contrarian look at " +
-                    "news, politics, and modern life — merciless critics of mainstream " +
-                    "media, on the air across the country every weekday morning.",
+                "An independent app for Armstrong & Getty listeners. It gathers each show " +
+                    "day's podcast hours into one episode, in the order they were posted, so " +
+                    "you can download it, cast it and listen straight through.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
             )
