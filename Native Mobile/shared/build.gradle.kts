@@ -92,6 +92,8 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+            // MapSettings for the in-app review state-store tests
+            implementation(libs.multiplatform.settings.test)
         }
     }
 }
