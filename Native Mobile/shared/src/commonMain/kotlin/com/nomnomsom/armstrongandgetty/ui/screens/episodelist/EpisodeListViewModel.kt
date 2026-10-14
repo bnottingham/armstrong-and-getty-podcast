@@ -15,6 +15,7 @@ import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.download.DownloadPolicy
 import com.nomnomsom.armstrongandgetty.download.DownloadSettings
 import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
+import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
 import com.nomnomsom.armstrongandgetty.review.SessionHealth
@@ -26,6 +27,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -123,6 +126,9 @@ class EpisodeListViewModel(
     private val downloadJobs = mutableMapOf<String, Job>()
     private val liveSegmentCheckJobs = mutableMapOf<String, Job>()
 
+    // Latest day from the last successful refresh, for the Wi-Fi-only catch-up pass.
+    private var lastLatestDate: String? = null
+
     init {
         viewModelScope.launch {
             repository.observeAllDays().collect { days ->
@@ -131,6 +137,16 @@ class EpisodeListViewModel(
                 if (currentDate != null) {
                     days.find { it.date == currentDate }?.let { appendPlayableSegmentsToCurrentPlaylist(it) }
                 }
+            }
+        }
+
+        // "Download over Wi-Fi only" catch-up: when downloads become allowed again (Wi-Fi is
+        // back, or the setting was turned off on mobile data), rerun the auto-download pass.
+        // With the setting off allowedFlow is a single `true`, which drop(1) skips — so this
+        // never fires and never reads the network.
+        viewModelScope.launch {
+            downloadPolicy.allowedFlow.drop(1).filter { it }.collect {
+                lastLatestDate?.let { runAutoDownloadPass(it) }
             }
         }
 
@@ -145,32 +161,9 @@ class EpisodeListViewModel(
             if (result.isSuccess) {
                 sessionHealth.reportSuccess("feed_refresh")
                 val latestDate = result.getOrThrow()
+                lastLatestDate = latestDate
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
-
-                // Manage today's day as well as the newest one: late-evening interviews
-                // carry pubDates past UTC midnight and form a later-dated card, which
-                // would otherwise steal "latest" and orphan the day still being aired.
-                val todayKey = repository.todayKey()
-                val candidateDates =
-                    if (todayKey != latestDate) listOf(latestDate, todayKey) else listOf(latestDate)
-
-                for (date in candidateDates) {
-                    val day = repository.getDayByDate(date) ?: continue
-                    if (repository.isUserDeleted(date)) continue
-                    when (day.state) {
-                        DownloadState.NONE -> autoDownload(date)
-                        DownloadState.DOWNLOADED -> {
-                            val segments = repository.parseSegments(day.segmentsJson)
-                            when {
-                                !day.isComplete -> checkForNewSegments(date)
-                                // A complete day can still be missing files if OMT was added after initial download.
-                                !repository.hasAllSegmentsOnDisk(date, segments.size) -> autoDownload(date)
-                            }
-                        }
-                        DownloadState.ERROR -> autoDownload(date)
-                        DownloadState.DOWNLOADING -> Unit
-                    }
-                }
+                runAutoDownloadPass(latestDate)
             } else {
                 sessionHealth.reportFailure("feed_refresh")
                 analytics.logEvent(AnalyticsEvents.FEED_REFRESH_FAILED)
@@ -179,6 +172,30 @@ class EpisodeListViewModel(
                     isRefreshing = false,
                     error = result.exceptionOrNull()?.message
                 )
+            }
+        }
+    }
+
+    /**
+     * Automatic downloads after a refresh (and, with Wi-Fi only on, when Wi-Fi comes back).
+     * Manages today's day as well as the newest one (see [autoDownloadCandidates]).
+     */
+    private suspend fun runAutoDownloadPass(latestDate: String) {
+        for (date in autoDownloadCandidates(latestDate, repository.todayKey())) {
+            val day = repository.getDayByDate(date) ?: continue
+            if (repository.isUserDeleted(date)) continue
+            when (day.state) {
+                DownloadState.NONE -> autoDownload(date)
+                DownloadState.DOWNLOADED -> {
+                    val segments = repository.parseSegments(day.segmentsJson)
+                    when {
+                        !day.isComplete -> checkForNewSegments(date)
+                        // A complete day can still be missing files if OMT was added after initial download.
+                        !repository.hasAllSegmentsOnDisk(date, segments.size) -> autoDownload(date)
+                    }
+                }
+                DownloadState.ERROR -> autoDownload(date)
+                DownloadState.DOWNLOADING -> Unit
             }
         }
     }

@@ -3,11 +3,14 @@ package com.nomnomsom.armstrongandgetty.background
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsBridgeHolder
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
-import com.nomnomsom.armstrongandgetty.data.model.DownloadState
 import com.nomnomsom.armstrongandgetty.data.model.PodcastDay
-import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.di.ensureKoinStarted
+import com.nomnomsom.armstrongandgetty.download.AutoDownloadAction
+import com.nomnomsom.armstrongandgetty.download.DownloadSettings
+import com.nomnomsom.armstrongandgetty.download.WifiRequiredException
+import com.nomnomsom.armstrongandgetty.download.autoDownloadCandidates
+import com.nomnomsom.armstrongandgetty.download.planAutoDownloads
 import com.nomnomsom.armstrongandgetty.notifications.AppNotifications
 import com.nomnomsom.armstrongandgetty.util.AppLog
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +35,10 @@ import platform.UIKit.UIApplicationDidEnterBackgroundNotification
  * usage patterns — unlike WorkManager there is no guaranteed cadence. The handler
  * mirrors the worker: refresh the feed, auto-download brand-new days (unless the user
  * deleted them), and append new segments to already-downloaded days.
+ *
+ * With "Download over Wi-Fi only" on, refresh and notifications still run on any network;
+ * downloads off Wi-Fi are held back and caught up by a later run (or app open) on Wi-Fi.
+ * With the setting off (the default) the handler behaves exactly as before.
  */
 private const val TAG = "BackgroundRefresh"
 private const val TASK_ID = "nomnomsom.armstrongandgetty.refresh"
@@ -72,10 +79,10 @@ private fun handleRefresh(task: BGAppRefreshTask) {
     // Koin may not be up yet, and the UI may be starting it on the main thread at this same
     // moment (ensureKoinStarted() serializes the two). This runs inside BGTaskScheduler's
     // callback, where an uncaught Kotlin exception aborts the app — fail the task instead.
-    val (repository, analytics) = try {
+    val (repository, analytics, downloadSettings) = try {
         ensureKoinStarted()
         val koin = KoinPlatform.getKoin()
-        koin.get<PodcastRepository>() to koin.get<AnalyticsTracker>()
+        Triple(koin.get<PodcastRepository>(), koin.get<AnalyticsTracker>(), koin.get<DownloadSettings>())
     } catch (e: Exception) {
         AppLog.e(TAG, "Background refresh could not start", e)
         AnalyticsBridgeHolder.tracker.recordError("Background refresh could not start", e)
@@ -102,25 +109,48 @@ private fun handleRefresh(task: BGAppRefreshTask) {
                 AnalyticsEvents.BACKGROUND_REFRESH,
                 mapOf(AnalyticsEvents.PARAM_RESULT to "success")
             )
-            notifyIfNewContent(daysBefore, repository.getAllDaysSnapshot())
+            val latestDate = refreshResult.getOrThrow()
+            val daysAfter = repository.getAllDaysSnapshot()
+            notifyIfNewContent(daysBefore, daysAfter)
 
-            for (day in repository.getAllDaysSnapshot()) {
-                val previousCount = daysBefore[day.date]
-                when {
-                    previousCount == null -> {
-                        if (repository.isUserDeleted(day.date)) {
-                            AppLog.d(TAG, "Skipping auto-download for ${day.date} — user previously deleted")
+            for (day in daysAfter) {
+                if (daysBefore[day.date] == null && repository.isUserDeleted(day.date)) {
+                    AppLog.d(TAG, "Skipping auto-download for ${day.date} — user previously deleted")
+                }
+            }
+
+            val plan = planAutoDownloads(
+                daysBefore = daysBefore,
+                daysAfter = daysAfter,
+                candidateDates = if (latestDate.isBlank()) emptyList()
+                    else autoDownloadCandidates(latestDate, repository.todayKey()),
+                // Setting on: also catch up today's/latest day an earlier deferral left NONE.
+                catchUp = downloadSettings.wifiOnly.value,
+                isUserDeleted = repository::isUserDeleted,
+                hasAllOnDisk = repository::hasAllSegmentsOnDisk
+            )
+
+            for (action in plan) {
+                val error = when (action) {
+                    is AutoDownloadAction.DownloadDay -> {
+                        if (action.date in daysBefore) {
+                            AppLog.d(TAG, "Auto-downloading deferred episode: ${action.date}")
                         } else {
-                            AppLog.d(TAG, "Auto-downloading new episode: ${day.date}")
-                            repository.downloadDay(day.date)
+                            AppLog.d(TAG, "Auto-downloading new episode: ${action.date}")
                         }
+                        repository.downloadDay(action.date).exceptionOrNull()
                     }
-                    day.state == DownloadState.DOWNLOADED &&
-                        (day.segmentCount > previousCount ||
-                            !repository.hasAllSegmentsOnDisk(day.date, day.segmentCount)) -> {
-                        AppLog.d(TAG, "Auto-downloading new/missing segments for: ${day.date}")
-                        repository.appendNewSegments(day.date)
+                    is AutoDownloadAction.AppendSegments -> {
+                        AppLog.d(TAG, "Auto-downloading new/missing segments for: ${action.date}")
+                        repository.appendNewSegments(action.date).exceptionOrNull()
                     }
+                }
+                if (error is WifiRequiredException) {
+                    AppLog.d(TAG, "Download for ${action.date} waits for Wi-Fi (Wi-Fi only is on)")
+                    analytics.logEvent(
+                        AnalyticsEvents.DOWNLOAD_WAITING_WIFI,
+                        mapOf(AnalyticsEvents.PARAM_DATE to action.date, AnalyticsEvents.PARAM_SOURCE to "background")
+                    )
                 }
             }
 
