@@ -47,6 +47,7 @@ import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListScreen
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import com.nomnomsom.armstrongandgetty.ui.screens.player.PlayerScreen
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
+import com.nomnomsom.armstrongandgetty.review.ReviewPromptHost
 import com.nomnomsom.armstrongandgetty.ui.theme.AGPodcastTheme
 import com.nomnomsom.armstrongandgetty.ui.theme.CardBg
 import com.nomnomsom.armstrongandgetty.ui.theme.DarkBg
@@ -78,6 +79,9 @@ fun App() {
                 currentRoute?.startsWith("player/") == true -> analytics.logScreen("player")
             }
         }
+
+        // In-app rating prompt: outside NavHost so it sees the Activity / root VC lifecycle.
+        ReviewPromptHost(currentRoute)
 
         val isPlayerRoute = currentRoute?.startsWith("player/") == true
         val isTopLevelRoute = currentRoute == "episodes" || currentRoute == "about"

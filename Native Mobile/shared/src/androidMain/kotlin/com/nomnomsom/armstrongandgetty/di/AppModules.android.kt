@@ -1,5 +1,6 @@
 package com.nomnomsom.armstrongandgetty.di
 
+import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
@@ -8,6 +9,11 @@ import com.nomnomsom.armstrongandgetty.data.local.PodcastDatabase
 import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.media.Media3PlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.PlatformPlayer
+import com.nomnomsom.armstrongandgetty.review.AndroidReviewEnvironment
+import com.nomnomsom.armstrongandgetty.review.ReviewEnvironment
+import com.nomnomsom.armstrongandgetty.review.ReviewKeys
+import com.nomnomsom.armstrongandgetty.review.ReviewStateStore
+import com.russhwolf.settings.SharedPreferencesSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import org.koin.android.ext.koin.androidContext
@@ -31,4 +37,14 @@ actual fun platformModule(): Module = module {
     single<PlatformPlayer> { Media3PlatformPlayer(androidContext()) }
 
     single<AnalyticsTracker> { FirebaseAnalyticsTracker(androidContext()) }
+
+    // In-app review state lives in its OWN prefs file — never "user_deletions".
+    single {
+        ReviewStateStore(
+            SharedPreferencesSettings(
+                androidContext().getSharedPreferences(ReviewKeys.ANDROID_PREFS_FILE, Context.MODE_PRIVATE)
+            )
+        )
+    }
+    single<ReviewEnvironment> { AndroidReviewEnvironment(androidContext()) }
 }

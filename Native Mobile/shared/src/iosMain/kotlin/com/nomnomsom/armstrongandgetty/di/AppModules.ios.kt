@@ -10,6 +10,10 @@ import com.nomnomsom.armstrongandgetty.data.local.UserDeletionTracker
 import com.nomnomsom.armstrongandgetty.media.AvPlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.CastAwarePlatformPlayer
 import com.nomnomsom.armstrongandgetty.media.PlatformPlayer
+import com.nomnomsom.armstrongandgetty.review.IosReviewEnvironment
+import com.nomnomsom.armstrongandgetty.review.ReviewEnvironment
+import com.nomnomsom.armstrongandgetty.review.ReviewStateStore
+import com.russhwolf.settings.NSUserDefaultsSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
 import org.koin.core.module.Module
@@ -17,6 +21,7 @@ import org.koin.dsl.module
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUserDomainMask
 
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
@@ -41,4 +46,8 @@ actual fun platformModule(): Module = module {
     single<PlatformPlayer> { CastAwarePlatformPlayer(AvPlatformPlayer()) }
 
     single<AnalyticsTracker> { AnalyticsBridgeHolder.tracker }
+
+    // In-app review state: new `in_app_review.`-prefixed keys in standard NSUserDefaults.
+    single { ReviewStateStore(NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)) }
+    single<ReviewEnvironment> { IosReviewEnvironment() }
 }

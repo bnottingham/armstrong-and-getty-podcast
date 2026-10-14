@@ -14,6 +14,7 @@ import com.nomnomsom.armstrongandgetty.data.model.state
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
 import com.nomnomsom.armstrongandgetty.media.PlaybackState
+import com.nomnomsom.armstrongandgetty.review.SessionHealth
 import com.nomnomsom.armstrongandgetty.util.AppLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -60,7 +61,9 @@ private data class PlayableSegment(
 class EpisodeListViewModel(
     private val repository: PodcastRepository,
     val playbackController: PlaybackController,
-    private val analytics: AnalyticsTracker
+    private val analytics: AnalyticsTracker,
+    // Visible failures suppress the in-app rating prompt for the rest of this process.
+    private val sessionHealth: SessionHealth
 ) : ViewModel() {
 
     companion object {
@@ -129,6 +132,7 @@ class EpisodeListViewModel(
                     }
                 }
             } else {
+                sessionHealth.reportFailure("feed_refresh")
                 analytics.logEvent(AnalyticsEvents.FEED_REFRESH_FAILED)
                 analytics.recordError("Feed refresh failed", result.exceptionOrNull())
                 _uiState.value = _uiState.value.copy(
@@ -169,6 +173,7 @@ class EpisodeListViewModel(
             if (result.isSuccess) {
                 analytics.logEvent(AnalyticsEvents.DOWNLOAD_COMPLETED, mapOf(AnalyticsEvents.PARAM_DATE to date))
             } else {
+                sessionHealth.reportFailure("download")
                 analytics.logEvent(AnalyticsEvents.DOWNLOAD_FAILED, mapOf(AnalyticsEvents.PARAM_DATE to date))
                 analytics.recordError("Episode download failed", result.exceptionOrNull())
             }
@@ -199,6 +204,7 @@ class EpisodeListViewModel(
                 _downloadProgress.value = _downloadProgress.value + (date to progress)
             }
             if (result.isFailure) {
+                sessionHealth.reportFailure("segment_retry")
                 AppLog.w(TAG, "Segment $index retry failed for $date: ${result.exceptionOrNull()?.message}")
             } else {
                 repository.getDayByDate(date)?.let { appendPlayableSegmentsToCurrentPlaylist(it) }

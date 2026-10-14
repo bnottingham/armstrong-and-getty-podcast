@@ -7,6 +7,8 @@ import com.nomnomsom.armstrongandgetty.data.remote.AudioDownloader
 import com.nomnomsom.armstrongandgetty.data.remote.RssFeedParser
 import com.nomnomsom.armstrongandgetty.data.repository.PodcastRepository
 import com.nomnomsom.armstrongandgetty.media.PlaybackController
+import com.nomnomsom.armstrongandgetty.review.ReviewCoordinator
+import com.nomnomsom.armstrongandgetty.review.SessionHealth
 import com.nomnomsom.armstrongandgetty.ui.screens.episodelist.EpisodeListViewModel
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
@@ -18,7 +20,8 @@ import org.koin.dsl.module
 
 /**
  * Platform module supplies: RoomDatabase.Builder<PodcastDatabase>, the HttpClient
- * (with a platform engine), UserDeletionTracker, PlatformPlayer, and AnalyticsTracker.
+ * (with a platform engine), UserDeletionTracker, PlatformPlayer, AnalyticsTracker,
+ * ReviewStateStore, and ReviewEnvironment.
  */
 expect fun platformModule(): Module
 
@@ -52,5 +55,17 @@ val commonModule = module {
 
     single { PlaybackController(get()) }
 
-    viewModel { EpisodeListViewModel(get(), get(), get()) }
+    // In-app rating prompt. Lazy singles, resolved only from App() composition (main thread).
+    single { SessionHealth() }
+    single {
+        ReviewCoordinator(
+            store = get(),
+            environment = get(),
+            playbackState = get<PlaybackController>().playbackState,
+            sessionHealth = get(),
+            analytics = get(),
+        )
+    }
+
+    viewModel { EpisodeListViewModel(get(), get(), get(), get()) }
 }

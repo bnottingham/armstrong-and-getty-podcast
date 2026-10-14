@@ -23,6 +23,8 @@ struct armstrongandgettyApp: App {
     init() {
         FirebaseApp.configure()
         AnalyticsBridgeKt.setAnalyticsTracker(tracker: FirebaseAnalyticsBridge())
+        // In-app rating prompt: Kotlin gates and times it; Swift makes the StoreKit call.
+        StoreReviewBridgeKt.setStoreReviewBridge(bridge: AppStoreReviewBridge())
         // BGTaskScheduler handlers must be registered before launch completes.
         BackgroundRefreshKt.registerBackgroundRefresh()
     }

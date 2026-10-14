@@ -83,6 +83,8 @@ kotlin {
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.analytics)
             implementation(libs.firebase.crashlytics)
+            // Play In-App Review (the rating prompt's Android launcher)
+            implementation(libs.play.review)
         }
 
         iosMain.dependencies {

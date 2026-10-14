@@ -41,6 +41,9 @@ object AnalyticsEvents {
     const val BACKGROUND_REFRESH = "background_refresh"
     const val ABOUT_LINK_OPEN = "about_link_open"
 
+    /** The app asked the platform for its review flow. Never means "shown" or "rated". */
+    const val IN_APP_REVIEW_REQUESTED = "in_app_review_requested"
+
     // Params
     const val PARAM_DATE = "episode_date"
     const val PARAM_SEGMENT_INDEX = "segment_index"
@@ -50,4 +53,7 @@ object AnalyticsEvents {
     const val PARAM_NEW_SEGMENTS = "new_segments"
     const val PARAM_RESULT = "result"
     const val PARAM_LINK = "link"
+    const val PARAM_MOMENT = "moment"
+    const val PARAM_REQUEST_NUMBER = "request_number"
+    const val PARAM_QUALIFYING_DAYS = "qualifying_days"
 }
