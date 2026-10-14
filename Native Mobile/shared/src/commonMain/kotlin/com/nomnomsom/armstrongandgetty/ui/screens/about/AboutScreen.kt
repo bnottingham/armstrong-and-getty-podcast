@@ -103,7 +103,7 @@ fun AboutScreen() {
         HeroCard()
 
         SectionHeader("THE SHOW")
-        LinkRow(AppIcons.Public, "Official Website", "armstrongandgetty.com") {
+        LinkRow(AppIcons.Public, "The Show's Website", "armstrongandgetty.com") {
             open("website", "$SITE/")
         }
         LinkRow(AppIcons.Headset, "How to Listen", "Stations, streams & apps") {
@@ -384,7 +384,7 @@ private fun ShopCard(onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("A&G Store", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Official Armstrong & Getty merch",
+                    "The show's merch store",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
