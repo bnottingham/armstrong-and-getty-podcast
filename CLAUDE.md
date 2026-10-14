@@ -150,7 +150,8 @@ Swift `AppStoreReviewBridge` in `iOS/FirebaseBridge.swift`, tests in `commonTest
 ## Wi-Fi-only downloads (setting)
 
 Code: `shared/.../download/` (`DownloadSettings`, `DownloadPolicy`, `NetworkStatus` + platform
-actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/` and `WifiGateTest`.
+actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/`, `WifiGateTest`,
+`AudioDownloaderGateTest` (scripted Ktor engine) and `WifiPromptViewModelTest`.
 
 - **Default OFF for everyone** (absent key = off; no migration). Off = the old behaviour
   exactly: every download uses Wi-Fi or mobile data and `DownloadPolicy` never consults the
@@ -162,21 +163,42 @@ actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/` and `WifiGateT
   `PodcastRepository` (`downloadDay`, `appendNewSegments`, `retrySegment`) before any state
   change, plus a per-attempt/watchdog backstop in `AudioDownloader`; the iOS audio-only Darwin
   client sets `allowsExpensiveNetworkAccess = false` per request while on.
-- **Never gated:** feed refresh, notifications, playback (incl. Android Auto's remote-URL
-  streaming), Cast and AirPlay. Keep `RssFeedParser` on the unqualified HttpClient.
+  `appendNewSegments` checks the gate **before** its own feed fetch (every caller runs it only
+  to download hours; off Wi-Fi the player's 2-minute live poll would otherwise refetch the
+  ~650 KB feed for nothing).
+- **Never gated:** the feed refresh itself (`refreshFeed`: worker, BG task, app open,
+  pull-to-refresh), notifications, playback (incl. Android Auto's remote-URL streaming), Cast
+  and AirPlay. Keep `RssFeedParser` on the unqualified HttpClient. The phone only plays
+  downloaded hours, so copy must never promise streaming of undownloaded episodes.
 - **Blocked ≠ failed:** `WifiRequiredException` leaves the day `NONE` (never `ERROR`), never
   enters `segmentsFailed`, and skips `SessionHealth.reportFailure`, `download_failed` and
   Crashlytics — so it never holds the review prompt.
 - **Manual tap while blocked:** `EpisodeListViewModel.wifiRequiredPrompt` → `WifiRequiredDialog`
-  in `App()` ("Turn Off & Download" / "Not Now"; holds the review prompt). No per-tap queue.
-- **Catch-up (setting on):** worker and BG task plan via `planAutoDownloads(catchUp = true)`
-  (also today's/latest day left `NONE`); the VM reruns its auto-download pass when
-  `allowedFlow` goes false→true. A deferring Android run enqueues one-time unique work
-  `new_episode_check_wifi` (UNMETERED). The periodic `new_episode_check` stays `CONNECTED` +
-  `KEEP` — never re-enqueue it for this setting.
+  in `App()` (holds the review prompt). The prompt carries the blocking `NetworkKind`
+  (`DownloadPolicy.blockedBy()`): only METERED offers "Turn Off & Download" / "Not Now";
+  OFFLINE and UNKNOWN get an OK-only dialog — never push a listener to give up the setting
+  for a download that would just fail. A manual download that lands some hours before Wi-Fi
+  drops prompts for "the rest of this episode" (not logged `download_completed`). A block
+  caused by the listener turning the setting ON mid-download stays silent
+  (`download_waiting_wifi` source `setting_changed`). Copy uses `mobileDataTerm`
+  ("cellular data" iOS / "mobile data" Android). No per-tap queue.
+- **Catch-up (setting on):** worker and BG task plan with `catchUp = wifiOnly &&
+  allowedNow()` — off Wi-Fi a catch-up would only be blocked again. A worker run with nothing
+  new keeps the old early return unless catch-up applies, and then plans only today's/latest
+  day (an old day's permanently failing hour isn't retried every 15 min). The VM reruns its
+  auto-download pass when `allowedFlow` goes false→true. A deferring Android run enqueues
+  one-time unique work `new_episode_check_wifi` (UNMETERED). The periodic `new_episode_check`
+  stays `CONNECTED` + `KEEP` — never re-enqueue it for this setting. **Known limit:** catch-up
+  covers only latest + today (`autoDownloadCandidates`); a deferred day overtaken by a newer
+  show day (or a "Not Now" tap on an older day) waits for a manual Download on Wi-Fi.
+- **Background messaging:** with the setting on and no Wi-Fi, a new-episode notification says
+  it will download on Wi-Fi instead of "ready". `download_waiting_wifi` (source `background`)
+  is logged only for dates with new content (`datesWithNewContent`), not on every run.
 - **Storage is new-keys-only:** Android prefs file `download_settings`, key
   `download_settings.wifi_only` (iOS: standard NSUserDefaults, same key). `DownloadSettingsTest`
   enforces default-off and no reuse of `user_deletions`/`dates`/`user_deletions_dates`/`in_app_review.*`.
+  Once shipped, never rename them (a rename silently resets every listener's choice to OFF) —
+  see Upgrade-in-place invariants.
 - New Koin definitions are lazy `single`s; the iOS BG task resolves them inside its try/catch.
 - **Testing:** an Android emulator with Wi-Fi off is metered mobile data. iOS simulators report
   the Mac's network (never expensive) — cellular behaviour needs a physical iPhone.
@@ -185,7 +207,10 @@ actuals, `AutoDownloadPlan`); tests in `commonTest/.../download/` and `WifiGateT
 
 - Website: `docs/` → Firebase Hosting (`firebase deploy --only hosting`), live at
   https://armstrong-and-getty-podcast.web.app (cleanUrls; store-listing URLs
-  `/privacy` and `/support`).
+  `/privacy` and `/support`). **Hold:** `docs/support.html` and `docs/privacy.html` describe the
+  "Download over Wi-Fi only" setting — don't deploy hosting from a tree containing that wording
+  until app builds with the setting are live on both stores (any unrelated site fix deployed
+  earlier would publish it too).
 - Android release signing: the Play **upload keystore is never in the repo** — it
   lives in `~/keystores/armstrong-and-getty-podcast/` (Brett's machine) and in GitHub
   Actions secrets (`ANDROID_KEYSTORE_BASE64/_PASSWORD`, `ANDROID_KEY_ALIAS/_PASSWORD`).
@@ -220,4 +245,7 @@ caveats: `tools/seo/README.md`.
 
 The app replaced an earlier native app. These names must never change: applicationId,
 Room db `ag_podcast_db`, files dir `podcasts/`, SharedPreferences `user_deletions`,
-and `Segment` JSON field names (Gson-compatible).
+and `Segment` JSON field names (Gson-compatible). Also frozen once shipped (renaming resets
+users' stored choices/state): prefs files `in_app_review` and `download_settings`, and the
+`in_app_review.*` / `download_settings.wifi_only` keys (iOS standard NSUserDefaults uses the
+same keys).
