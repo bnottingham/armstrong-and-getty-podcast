@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsEvents
 import com.nomnomsom.armstrongandgetty.analytics.AnalyticsTracker
+import com.nomnomsom.armstrongandgetty.review.StoreLinks
 import com.nomnomsom.armstrongandgetty.ui.icons.AppIcons
 import com.nomnomsom.armstrongandgetty.ui.icons.Article
 import com.nomnomsom.armstrongandgetty.ui.icons.Facebook
@@ -47,6 +48,7 @@ import com.nomnomsom.armstrongandgetty.ui.icons.OpenInNew
 import com.nomnomsom.armstrongandgetty.ui.icons.Phone
 import com.nomnomsom.armstrongandgetty.ui.icons.Public
 import com.nomnomsom.armstrongandgetty.ui.icons.ShoppingBag
+import com.nomnomsom.armstrongandgetty.ui.icons.Star
 import com.nomnomsom.armstrongandgetty.ui.icons.XLogo
 import com.nomnomsom.armstrongandgetty.ui.icons.YouTube
 import com.nomnomsom.armstrongandgetty.ui.theme.CardBg
@@ -66,14 +68,22 @@ fun AboutScreen() {
     val uriHandler = LocalUriHandler.current
     val analytics: AnalyticsTracker = koinInject()
 
-    fun open(linkKey: String, url: String) {
+    /** Logs once, then tries each URL in order until one opens. */
+    fun openFirst(linkKey: String, urls: List<String>) {
         analytics.logEvent(
             AnalyticsEvents.ABOUT_LINK_OPEN,
             mapOf(AnalyticsEvents.PARAM_LINK to linkKey)
         )
-        runCatching { uriHandler.openUri(url) }
-            .onFailure { analytics.recordError("about link failed: $linkKey", it) }
+        var lastError: Throwable? = null
+        for (url in urls) {
+            val result = runCatching { uriHandler.openUri(url) }
+            if (result.isSuccess) return
+            lastError = result.exceptionOrNull()
+        }
+        analytics.recordError("about link failed: $linkKey", lastError)
     }
+
+    fun open(linkKey: String, url: String) = openFirst(linkKey, listOf(url))
 
     Column(
         modifier = Modifier
@@ -130,6 +140,10 @@ fun AboutScreen() {
         }
 
         SectionHeader("APP DEVELOPER")
+        // Store deep link only — never the in-app review API (see CLAUDE.md "In-app review").
+        LinkRow(AppIcons.Star, "Rate the App", "Leave a rating on ${StoreLinks.storeName}") {
+            openFirst("rate_app", StoreLinks.rateAppUrls)
+        }
         DeveloperCard { open("developer_email", DEVELOPER_EMAIL_URI) }
 
         Text(
