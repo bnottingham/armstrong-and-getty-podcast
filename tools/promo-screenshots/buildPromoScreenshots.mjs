@@ -78,14 +78,11 @@ const scaleLayout = (L, factor) =>
 
 const ANDROID_PHONE_LAYOUT = {
   brandTop: 96,
-  laurelW: 106,
-  laurelH: 288,
-  heroGap: 32,
-  wordmark: 52,
-  heroHeadlineTop: 58,
-  heroHeadline: 96,
-  heroKickerTop: 30,
   heroKicker: 26,
+  heroHeadlineTop: 52,
+  heroHeadline: 96,
+  heroSublineTop: 34,
+  heroSubline: 34,
   heroDeviceLeft: 54,
   heroDeviceTop: 880,
   heroDeviceWidth: 1120,
@@ -113,15 +110,12 @@ const PROFILES = {
     statusBarCrop: 186,
     out: "screenshots/app-store/iphone-6.9",
     L: {
-          brandTop: 140,
-      laurelW: 130,
-      laurelH: 352,
-      heroGap: 40,
-      wordmark: 68,
-      heroHeadlineTop: 74,
-      heroHeadline: 128,
-      heroKickerTop: 40,
+      brandTop: 140,
       heroKicker: 34,
+      heroHeadlineTop: 64,
+      heroHeadline: 128,
+      heroSublineTop: 44,
+      heroSubline: 44,
       heroDeviceLeft: 66,
       heroDeviceTop: 1216,
       heroDeviceWidth: 1216,
@@ -148,15 +142,12 @@ const PROFILES = {
     statusBarCrop: 48,
     out: "screenshots/app-store/ipad-13",
     L: {
-          brandTop: 160,
-      laurelW: 196,
-      laurelH: 512,
-      heroGap: 62,
-      wordmark: 92,
+      brandTop: 160,
+      heroKicker: 46,
       heroHeadlineTop: 76,
       heroHeadline: 176,
-      heroKickerTop: 44,
-      heroKicker: 46,
+      heroSublineTop: 60,
+      heroSubline: 60,
       heroDeviceLeft: 60,
       heroDeviceTop: 1500,
       heroDeviceWidth: 2150,
@@ -216,11 +207,15 @@ const PLAY_MAX_SCREENSHOTS = 8;
 
 const slides = [
   {
+    // The app is unofficial: the hero leads with that, and the show's name is
+    // only a small subline — no large serif wordmark, no laurel wreath (both
+    // read as official show branding or accolades), and no "Podcast · On
+    // Demand" lockup (it mirrors the official feed name).
     id: "01-hero",
     kind: "hero",
-    wordmark: "Armstrong & Getty",
+    kicker: "Unofficial fan-made podcast app",
     headline: "Never Miss\nThe Show.",
-    kicker: "Podcast · On Demand",
+    subline: "For Armstrong & Getty listeners",
     shot: "01-episodes.png",
   },
   {
@@ -284,47 +279,6 @@ const escapeHtml = (value) =>
     .replace(/>/g, "&gt;");
 
 const lines = (value) => escapeHtml(value).replace(/\n/g, "<br>");
-
-/**
- * A laurel half-wreath — the right-hand branch; the left copy is mirrored in
- * CSS. Leaves alternate off a curved stem and sweep up along it, tapering
- * toward the tip.
- */
-const laurel = () => {
-  const P = [
-    [64, 198],
-    [34, 152],
-    [22, 78],
-    [48, 4],
-  ];
-  const cubic = (t) => {
-    const u = 1 - t;
-    const at = (i) =>
-      u ** 3 * P[0][i] + 3 * u * u * t * P[1][i] + 3 * u * t * t * P[2][i] + t ** 3 * P[3][i];
-    const d = (i) =>
-      3 * u * u * (P[1][i] - P[0][i]) +
-      6 * u * t * (P[2][i] - P[1][i]) +
-      3 * t * t * (P[3][i] - P[2][i]);
-    return { x: at(0), y: at(1), angle: (Math.atan2(d(1), d(0)) * 180) / Math.PI };
-  };
-
-  const COUNT = 9;
-  const leaves = [];
-  for (let i = 0; i < COUNT; i += 1) {
-    const t = 0.06 + (i / (COUNT - 1)) * 0.86;
-    const { x, y, angle } = cubic(t);
-    const side = i % 2 === 0 ? -1 : 1;
-    const scale = 1 - 0.42 * t;
-    leaves.push(
-      `<path d="M0 0 C 12 -9, 30 -9, 42 0 C 30 9, 12 9, 0 0 Z" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(angle + side * 46).toFixed(1)}) scale(${scale.toFixed(3)})"/>`,
-    );
-  }
-  const stem = `M${P[0][0]} ${P[0][1]} C ${P[1][0]} ${P[1][1]}, ${P[2][0]} ${P[2][1]}, ${P[3][0]} ${P[3][1]}`;
-  return `<svg class="laurel" viewBox="6 -20 88 238" aria-hidden="true">
-    <path d="${stem}" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-    <g fill="currentColor">${leaves.join("")}</g>
-  </svg>`;
-};
 
 /* ------------------------------------------------------------------ *
  * Fonts.
@@ -481,37 +435,28 @@ const buildCss = ({ width, height, L }) => `
 
   /* ---- 1: hero ---- */
 
-  .wordmark {
-    font-family: "Playfair Display", Georgia, serif;
-    font-size: ${L.wordmark}px;
-    font-weight: 600;
-    letter-spacing: -0.012em;
-    margin-top: ${L.brandTop}px;
-  }
-
-  .hero-frame {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: ${L.heroGap}px;
-    margin-top: ${L.heroHeadlineTop}px;
-    color: rgba(232, 179, 75, 0.34);
-  }
-
-  .laurel { width: ${L.laurelW}px; height: ${L.laurelH}px; }
-  .laurel.left { transform: scaleX(-1); }
-
-  .hero-headline {
-    font-size: ${L.heroHeadline}px;
-  }
-
+  /* The unofficial marker leads; the show's name is a small subline. */
   .hero-kicker {
-    margin-top: ${L.heroKickerTop}px;
+    margin-top: ${L.brandTop}px;
     font-size: ${L.heroKicker}px;
     font-weight: 700;
     letter-spacing: 0.26em;
     text-transform: uppercase;
     color: ${T.gold};
+  }
+
+  .hero-headline {
+    margin-top: ${L.heroHeadlineTop}px;
+    font-size: ${L.heroHeadline}px;
+  }
+
+  .hero-subline {
+    margin-top: ${L.heroSublineTop}px;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: ${L.heroSubline}px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: ${T.textSecondary};
   }
 
   .hero-phone {
@@ -553,13 +498,9 @@ const renderSlide = (slide, shotsDir) => {
 
   if (slide.kind === "hero") {
     return `<div class="slide">
-      <div class="wordmark">${escapeHtml(slide.wordmark)}</div>
-      <div class="hero-frame">
-        ${laurel().replace('class="laurel"', 'class="laurel left"')}
-        <div class="headline hero-headline">${lines(slide.headline)}</div>
-        ${laurel()}
-      </div>
       <div class="hero-kicker">${escapeHtml(slide.kicker)}</div>
+      <div class="headline hero-headline">${lines(slide.headline)}</div>
+      <div class="hero-subline">${escapeHtml(slide.subline)}</div>
       <div class="hero-phone">${phone(slide.shot)}</div>
     </div>`;
   }
