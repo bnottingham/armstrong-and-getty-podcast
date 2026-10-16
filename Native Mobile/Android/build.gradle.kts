@@ -12,8 +12,8 @@ android {
         applicationId = "com.nomnomsom.armstrongandgetty"
         minSdk = 26
         targetSdk = 37
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 8
-        versionName = (project.findProperty("versionName") as String?) ?: "2.0.4"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 9
+        versionName = (project.findProperty("versionName") as String?) ?: "2.0.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

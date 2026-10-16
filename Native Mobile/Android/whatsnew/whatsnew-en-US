@@ -1,3 +1,4 @@
-New: a "Rate the App" option in the About tab.
-After you've listened on a few different days, the app may occasionally show Google Play's standard rating card, never mid-episode.
+New: "Download over Wi-Fi only" on the About tab. It's off by default; turn it on and new episodes wait for Wi-Fi instead of using mobile data.
+The app is now labeled as an unofficial, fan-made app.
+Fixed: a new install now downloads only the latest show, not the whole back catalog.
 Reliability improvements.
